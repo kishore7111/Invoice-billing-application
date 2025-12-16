@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import '../App.css'
-import { CLIENT_DIRECTORY, ORGANIZATION, SERVICE_CATALOG } from '../data'
+import { CLIENT_DIRECTORY, ORGANIZATION, PAYMENT_GATEWAY, SERVICE_CATALOG } from '../data'
 import type {
   ClientDetails,
   ClientProfile,
@@ -96,6 +96,11 @@ export const InvoiceBuilder = () => {
   const [layoutMode, setLayoutMode] = useState<'split' | 'form' | 'preview'>('form')
   const previewRef = useRef<HTMLDivElement>(null)
   const hasUserSelectedLayout = useRef(false)
+  const gatewayChannels = useMemo(() => PAYMENT_GATEWAY.channels.filter((channel) => channel.status !== 'Disabled'), [])
+  const preferredGatewayChannel = useMemo(
+    () => gatewayChannels.find((channel) => channel.status === 'Enabled') ?? gatewayChannels[0],
+    [gatewayChannels],
+  )
 
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) {
@@ -773,6 +778,38 @@ export const InvoiceBuilder = () => {
             <div className="grand-total">
               <span>Total due</span>
               <span>{currencyFormatter.format(totals.total)}</span>
+            </div>
+          </div>
+
+          <div className="gateway-block">
+            <h4>Payment processing</h4>
+            <p>
+              Online collections managed through <strong>{PAYMENT_GATEWAY.providerName}</strong>. Current status:{' '}
+              <span className={`gateway-tag ${PAYMENT_GATEWAY.status.toLowerCase()}`}>{PAYMENT_GATEWAY.status}</span>
+            </p>
+            <div className="gateway-details">
+              <div>
+                <span className="label">Primary channel</span>
+                <strong>{preferredGatewayChannel?.label ?? '—'}</strong>
+                {preferredGatewayChannel ? (
+                  <small>
+                    SLA {preferredGatewayChannel.slaMinutes} min • Success{' '}
+                    {preferredGatewayChannel.successRate.toFixed(1)}%
+                  </small>
+                ) : null}
+              </div>
+              <div>
+                <span className="label">Merchant ID</span>
+                <strong>{PAYMENT_GATEWAY.credentials.merchantId}</strong>
+                <small>Webhook: {PAYMENT_GATEWAY.credentials.webhookUrl}</small>
+              </div>
+            </div>
+            <div className="gateway-channel-list">
+              {gatewayChannels.map((channel) => (
+                <span key={channel.id} className={`gateway-chip ${channel.status.toLowerCase()}`}>
+                  {channel.label} • {channel.successRate.toFixed(1)}%
+                </span>
+              ))}
             </div>
           </div>
 
