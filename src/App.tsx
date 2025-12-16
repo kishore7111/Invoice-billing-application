@@ -5,13 +5,21 @@ import {
   CLIENT_DIRECTORY,
   INVOICE_LEDGER,
   ORGANIZATION,
+  PAYMENT_GATEWAY,
+  PAYMENT_TRANSACTIONS,
   SERVICE_CATALOG,
   TEAM_MEMBERS,
 } from './data'
-import type { ActivityLog, InvoiceRecord, InvoiceStatus } from './types'
+import type {
+  ActivityLog,
+  InvoiceRecord,
+  InvoiceStatus,
+  PaymentGatewayChannel,
+  PaymentTransaction,
+} from './types'
 import { InvoiceBuilder } from './components/InvoiceBuilder'
 
-type AppView = 'overview' | 'invoices' | 'builder' | 'clients' | 'team' | 'settings'
+type AppView = 'overview' | 'invoices' | 'builder' | 'clients' | 'team' | 'settings' | 'payments'
 
 const statusTone: Record<InvoiceStatus, string> = {
   Draft: 'draft',
@@ -67,6 +75,23 @@ function App() {
     }
     return INVOICE_LEDGER
   }, [activeView, recentInvoices])
+
+  const paymentInsights = useMemo(() => {
+    const totalVolume = PAYMENT_TRANSACTIONS.filter((txn) => txn.status === 'Succeeded').reduce(
+      (sum, txn) => sum + txn.amount,
+      0,
+    )
+    const successCount = PAYMENT_TRANSACTIONS.filter((txn) => txn.status === 'Succeeded').length
+    const failureCount = PAYMENT_TRANSACTIONS.filter((txn) => txn.status === 'Failed').length
+    const pendingCount = PAYMENT_TRANSACTIONS.filter((txn) => txn.status === 'Pending').length
+    const successRate = PAYMENT_TRANSACTIONS.length
+      ? (successCount / PAYMENT_TRANSACTIONS.length) * 100
+      : 0
+    const recentTransactions = [...PAYMENT_TRANSACTIONS]
+      .sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime())
+      .slice(0, 5)
+    return { totalVolume, successRate, failureCount, pendingCount, recentTransactions }
+  }, [])
 
   const renderStatusChip = (status: InvoiceStatus) => (
     <span className={`status-chip ${statusTone[status]}`}>{status}</span>
@@ -140,6 +165,131 @@ function App() {
               })}
             </div>
           </section>
+        )
+      case 'payments':
+        return (
+          <div className="operations-grid">
+            <section className="module-card span-2">
+              <header className="module-heading">
+                <div>
+                  <h2>Payment gateway control centre</h2>
+                  <p>Monitor provider health, channel uptime, and reconciliation windows.</p>
+                </div>
+                <div className="gateway-actions">
+                  <button type="button" className="outline">
+                    Test webhook
+                  </button>
+                  <button type="button" className="primary">
+                    Refresh sync
+                  </button>
+                </div>
+              </header>
+              <div className="gateway-summary">
+                <div>
+                  <span className={`gateway-status ${PAYMENT_GATEWAY.status.toLowerCase()}`}>
+                    {PAYMENT_GATEWAY.status}
+                  </span>
+                  <h3>{PAYMENT_GATEWAY.providerName}</h3>
+                  <p>Settlement window: {PAYMENT_GATEWAY.settlementWindow}</p>
+                </div>
+                <div className="summary-grid">
+                  <div>
+                    <span className="label">Fee structure</span>
+                    <strong>{PAYMENT_GATEWAY.feePercentage.toFixed(1)}%</strong>
+                  </div>
+                  <div>
+                    <span className="label">Last sync</span>
+                    <strong>
+                      {new Intl.DateTimeFormat('en-IN', {
+                        dateStyle: 'medium',
+                        timeStyle: 'short',
+                      }).format(new Date(PAYMENT_GATEWAY.lastSync))}
+                    </strong>
+                  </div>
+                  <div>
+                    <span className="label">Reconciliation</span>
+                    <strong>{PAYMENT_GATEWAY.reconciliationStatus}</strong>
+                  </div>
+                  <div>
+                    <span className="label">Merchant ID</span>
+                    <strong>{PAYMENT_GATEWAY.credentials.merchantId}</strong>
+                  </div>
+                </div>
+                <div className="credential-card">
+                  <p>
+                    Key ending <strong>{PAYMENT_GATEWAY.credentials.keyEnding}</strong>
+                  </p>
+                  <p>{PAYMENT_GATEWAY.credentials.webhookUrl}</p>
+                </div>
+              </div>
+              <div className="channel-grid">
+                {PAYMENT_GATEWAY.channels.map((channel: PaymentGatewayChannel) => (
+                  <article key={channel.id} className="channel-card">
+                    <header>
+                      <h4>{channel.label}</h4>
+                      <span className={`channel-status ${channel.status.toLowerCase()}`}>{channel.status}</span>
+                    </header>
+                    <div className="channel-metrics">
+                      <div>
+                        <span className="label">Success rate</span>
+                        <strong>{channel.successRate.toFixed(1)}%</strong>
+                      </div>
+                      <div>
+                        <span className="label">Settlement SLA</span>
+                        <strong>{channel.slaMinutes} min</strong>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="module-card">
+              <header className="module-heading">
+                <div>
+                  <h2>Recent payment activity</h2>
+                  <p>Authorised captures and settlements across invoices.</p>
+                </div>
+              </header>
+              <div className="transaction-list">
+                {paymentInsights.recentTransactions.map((txn: PaymentTransaction) => {
+                  const client = CLIENT_DIRECTORY.find((c) => c.id === txn.clientId)
+                  const statusClass = txn.status.toLowerCase()
+                  return (
+                    <div key={txn.id} className="transaction-row">
+                      <div>
+                        <h4>{txn.reference}</h4>
+                        <span className="txn-meta">
+                          Invoice {txn.invoiceId.toUpperCase()} • {client?.companyName ?? '—'}
+                        </span>
+                      </div>
+                      <div className="txn-amount">
+                        <strong>
+                          {new Intl.NumberFormat('en-IN', {
+                            style: 'currency',
+                            currency: txn.currency,
+                            maximumFractionDigits: 0,
+                          }).format(txn.amount)}
+                        </strong>
+                        <small>
+                          Fee {new Intl.NumberFormat('en-IN', { style: 'currency', currency: txn.currency }).format(txn.feeAmount)}
+                        </small>
+                      </div>
+                      <div className="txn-status-block">
+                        <span className={`txn-status ${statusClass}`}>{txn.status}</span>
+                        <span className="txn-meta">
+                          {new Intl.DateTimeFormat('en-IN', {
+                            dateStyle: 'medium',
+                            timeStyle: 'short',
+                          }).format(new Date(txn.receivedAt))}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          </div>
         )
       case 'clients':
         return (
@@ -373,6 +523,40 @@ function App() {
             <section className="module-card">
               <header className="module-heading">
                 <div>
+                  <h2>Gateway performance snapshot</h2>
+                  <p>Payments processed through {PAYMENT_GATEWAY.providerName}.</p>
+                </div>
+                <button type="button" className="outline" onClick={() => setActiveView('payments')}>
+                  Manage payments
+                </button>
+              </header>
+              <div className="payment-metrics">
+                <div>
+                  <span className="label">Success rate</span>
+                  <strong>{paymentInsights.successRate.toFixed(1)}%</strong>
+                </div>
+                <div>
+                  <span className="label">Total volume</span>
+                  <strong>
+                    {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(
+                      paymentInsights.totalVolume,
+                    )}
+                  </strong>
+                </div>
+                <div>
+                  <span className="label">Pending captures</span>
+                  <strong>{paymentInsights.pendingCount}</strong>
+                </div>
+                <div>
+                  <span className="label">Failed attempts</span>
+                  <strong>{paymentInsights.failureCount}</strong>
+                </div>
+              </div>
+            </section>
+
+            <section className="module-card">
+              <header className="module-heading">
+                <div>
                   <h2>Finance squad</h2>
                   <p>Specialists coordinating billing, strategy, and delivery.</p>
                 </div>
@@ -453,6 +637,13 @@ function App() {
             onClick={() => setActiveView('settings')}
           >
             Settings
+          </button>
+          <button
+            type="button"
+            className={activeView === 'payments' ? 'active' : ''}
+            onClick={() => setActiveView('payments')}
+          >
+            Payment console
           </button>
         </nav>
         <footer className="sidebar-footer">

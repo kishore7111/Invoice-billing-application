@@ -88,3 +88,50 @@ export interface TeamMember {
   avatarColor: string
   initials: string
 }
+
+export type PaymentGatewayStatus = 'Active' | 'Maintenance' | 'Disconnected'
+
+export type PaymentChannelStatus = 'Enabled' | 'Disabled' | 'Degraded'
+
+export type PaymentMethod = 'UPI' | 'Credit Card' | 'NetBanking' | 'Wire Transfer'
+
+export interface PaymentGatewayChannel {
+  id: string
+  label: string
+  method: PaymentMethod
+  status: PaymentChannelStatus
+  successRate: number
+  slaMinutes: number
+}
+
+export interface PaymentGatewayConfig {
+  id: string
+  providerName: string
+  status: PaymentGatewayStatus
+  reconciliationStatus: 'On schedule' | 'Delayed'
+  settlementWindow: string
+  feePercentage: number
+  lastSync: string
+  credentials: {
+    merchantId: string
+    keyEnding: string
+    webhookUrl: string
+  }
+  channels: PaymentGatewayChannel[]
+}
+
+export type PaymentTransactionStatus = 'Succeeded' | 'Pending' | 'Failed'
+
+export interface PaymentTransaction {
+  id: string
+  invoiceId: string
+  clientId: string
+  amount: number
+  currency: InvoiceFormState['currency']
+  method: PaymentMethod
+  status: PaymentTransactionStatus
+  receivedAt: string
+  feeAmount: number
+  netAmount: number
+  reference: string
+}
