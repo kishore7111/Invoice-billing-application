@@ -475,90 +475,92 @@ export const InvoiceBuilder = () => {
               <span className="section-hint">Select billable services and tailor descriptions per engagement.</span>
             </div>
             <div className="line-items-table">
-              <div className="table-head">
-                <span>Service</span>
-                <span>Description</span>
-                <span>Unit price</span>
-                <span>Quantity</span>
-                <span>Discount %</span>
-                <span>Amount</span>
-                <span></span>
+              <div className="line-items-track">
+                <div className="table-head">
+                  <span>Service</span>
+                  <span>Description</span>
+                  <span>Unit price</span>
+                  <span>Quantity</span>
+                  <span>Discount %</span>
+                  <span>Amount</span>
+                  <span></span>
+                </div>
+                {formState.lineItems.map((item) => {
+                  const service = item.serviceId ? serviceLookup[item.serviceId] : undefined
+                  const lineBase = item.quantity * item.unitPrice
+                  const lineDiscount = (lineBase * item.discountRate) / 100
+                  const lineTotal = lineBase - lineDiscount
+                  return (
+                    <div className="table-row" key={item.id}>
+                      <div className="cell">
+                        <select value={item.serviceId} onChange={(event) => handleServiceChange(item.id, event.target.value)}>
+                          <option value="">Select service</option>
+                          {SERVICE_CATALOG.map((svc) => (
+                            <option key={svc.id} value={svc.id}>
+                              {svc.name}
+                            </option>
+                          ))}
+                        </select>
+                        {service ? <small className="cell-sub">{service.unit}</small> : null}
+                      </div>
+                      <div className="cell">
+                        <textarea
+                          value={item.description}
+                          onChange={(event) => handleLineItemFieldChange(item.id, 'description', event.target.value)}
+                          rows={3}
+                        />
+                        <textarea
+                          className="note"
+                          placeholder="Internal notes or deliverable highlights (optional)"
+                          value={item.notes ?? ''}
+                          onChange={(event) => handleLineItemFieldChange(item.id, 'notes', event.target.value)}
+                          rows={2}
+                        />
+                      </div>
+                      <div className="cell">
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.01}
+                          value={item.unitPrice}
+                          onChange={(event) =>
+                            handleLineItemFieldChange(item.id, 'unitPrice', Number(event.target.value) || 0)
+                          }
+                        />
+                      </div>
+                      <div className="cell">
+                        <input
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          value={item.quantity}
+                          onChange={(event) =>
+                            handleLineItemFieldChange(item.id, 'quantity', Number(event.target.value) || 0)
+                          }
+                        />
+                      </div>
+                      <div className="cell">
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.5}
+                          value={item.discountRate}
+                          onChange={(event) =>
+                            handleLineItemFieldChange(item.id, 'discountRate', Number(event.target.value) || 0)
+                          }
+                        />
+                      </div>
+                      <div className="cell monetary">{currencyFormatter.format(lineTotal || 0)}</div>
+                      <div className="cell actions">
+                        <button type="button" className="ghost" onClick={() => handleRemoveLineItem(item.id)}>
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-              {formState.lineItems.map((item) => {
-                const service = item.serviceId ? serviceLookup[item.serviceId] : undefined
-                const lineBase = item.quantity * item.unitPrice
-                const lineDiscount = (lineBase * item.discountRate) / 100
-                const lineTotal = lineBase - lineDiscount
-                return (
-                  <div className="table-row" key={item.id}>
-                    <div className="cell">
-                      <select value={item.serviceId} onChange={(event) => handleServiceChange(item.id, event.target.value)}>
-                        <option value="">Select service</option>
-                        {SERVICE_CATALOG.map((svc) => (
-                          <option key={svc.id} value={svc.id}>
-                            {svc.name}
-                          </option>
-                        ))}
-                      </select>
-                      {service ? <small className="cell-sub">{service.unit}</small> : null}
-                    </div>
-                    <div className="cell">
-                      <textarea
-                        value={item.description}
-                        onChange={(event) => handleLineItemFieldChange(item.id, 'description', event.target.value)}
-                        rows={3}
-                      />
-                      <textarea
-                        className="note"
-                        placeholder="Internal notes or deliverable highlights (optional)"
-                        value={item.notes ?? ''}
-                        onChange={(event) => handleLineItemFieldChange(item.id, 'notes', event.target.value)}
-                        rows={2}
-                      />
-                    </div>
-                    <div className="cell">
-                      <input
-                        type="number"
-                        min={0}
-                        step={0.01}
-                        value={item.unitPrice}
-                        onChange={(event) =>
-                          handleLineItemFieldChange(item.id, 'unitPrice', Number(event.target.value) || 0)
-                        }
-                      />
-                    </div>
-                    <div className="cell">
-                      <input
-                        type="number"
-                        min={0}
-                        step={0.5}
-                        value={item.quantity}
-                        onChange={(event) =>
-                          handleLineItemFieldChange(item.id, 'quantity', Number(event.target.value) || 0)
-                        }
-                      />
-                    </div>
-                    <div className="cell">
-                      <input
-                        type="number"
-                        min={0}
-                        max={100}
-                        step={0.5}
-                        value={item.discountRate}
-                        onChange={(event) =>
-                          handleLineItemFieldChange(item.id, 'discountRate', Number(event.target.value) || 0)
-                        }
-                      />
-                    </div>
-                    <div className="cell monetary">{currencyFormatter.format(lineTotal || 0)}</div>
-                    <div className="cell actions">
-                      <button type="button" className="ghost" onClick={() => handleRemoveLineItem(item.id)}>
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
             </div>
             <div className="line-item-actions">
               <button type="button" className="outline" onClick={handleAddLineItem}>

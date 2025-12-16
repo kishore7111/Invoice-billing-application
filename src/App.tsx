@@ -90,207 +90,311 @@ function App() {
   )
 
   const renderContent = () => {
-    if (activeView === 'builder') {
-      return <InvoiceBuilder />
-    }
-
-    if (activeView === 'invoices') {
-      return (
-        <section className="module-card">
-          <header className="module-heading">
-            <div>
-              <h2>All invoices</h2>
-              <p>Monitor billing progress across engagements and status buckets.</p>
-            </div>
-            <button type="button" className="primary" onClick={() => setActiveView('builder')}>
-              Create invoice
-            </button>
-          </header>
-          <div className="invoice-table">
-            <div className="table-head">
-              <span>Invoice</span>
-              <span>Client</span>
-              <span>Engagement</span>
-              <span>Issued</span>
-              <span>Due</span>
-              <span>Status</span>
-              <span>Amount</span>
-            </div>
-            {filteredInvoices.map((invoice) => {
-              const client = CLIENT_DIRECTORY.find((c) => c.id === invoice.clientId)
-              return (
-                <div key={invoice.id} className="table-row invoice">
-                  <span>
-                    <strong>{invoice.invoiceNumber}</strong>
-                    <small>{invoice.currency}</small>
-                  </span>
-                  <span>{client?.companyName ?? '—'}</span>
-                  <span>{invoice.engagement}</span>
-                  <span>{invoice.issueDate}</span>
-                  <span>{invoice.dueDate}</span>
-                  <span>{renderStatusChip(invoice.status)}</span>
-                  <span>
-                    {new Intl.NumberFormat('en-IN', {
-                      style: 'currency',
-                      currency: invoice.currency,
-                      maximumFractionDigits: 0,
-                    }).format(invoice.amount)}
-                  </span>
-                </div>
-              )
-            })}
-          </div>
-        </section>
-      )
-    }
-
-    return (
-      <div className="overview-grid">
-        <section className="module-card span-2">
-          <header className="module-heading">
-            <div>
-              <h2>Invoice health overview</h2>
-              <p>A snapshot of receivables, fulfilment status, and collection risk.</p>
-            </div>
-            <button type="button" className="outline" onClick={() => setActiveView('invoices')}>
-              View all invoices
-            </button>
-          </header>
-          <div className="stat-grid">
-            <div className="stat-card primary">
-              <span className="label">Outstanding receivables</span>
-              <strong>
-                {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(
-                  overviewStats.totals.outstanding,
-                )}
-              </strong>
-              <p>Includes pending and overdue invoices awaiting collection.</p>
-            </div>
-            <div className="stat-card">
-              <span className="label">Draft</span>
-              <strong>{overviewStats.totals.Draft.toLocaleString('en-IN')}</strong>
-              <p>Value of invoices saved but not shared with clients.</p>
-            </div>
-            <div className="stat-card">
-              <span className="label">Pending approval</span>
-              <strong>{overviewStats.totals.Pending.toLocaleString('en-IN')}</strong>
-              <p>Invoiced amounts awaiting client confirmation.</p>
-            </div>
-            <div className="stat-card">
-              <span className="label">Collected</span>
-              <strong>{overviewStats.totals.Paid.toLocaleString('en-IN')}</strong>
-              <p>Confirmed payments received this quarter.</p>
-            </div>
-            <div className="stat-card warning">
-              <span className="label">Overdue</span>
-              <strong>{overviewStats.totals.Overdue.toLocaleString('en-IN')}</strong>
-              <p>Requires immediate follow-up from collections team.</p>
-            </div>
-          </div>
-        </section>
-
-        <section className="module-card">
-          <header className="module-heading">
-            <div>
-              <h2>Recent invoices</h2>
-              <p>Latest invoices sent to strategic accounts.</p>
-            </div>
-          </header>
-          <div className="invoice-list">
-            {recentInvoices.map((invoice) => {
-              const client = CLIENT_DIRECTORY.find((c) => c.id === invoice.clientId)
-              return (
-                <article key={invoice.id} className="invoice-card">
-                  <header>
-                    <div>
-                      <h3>{invoice.invoiceNumber}</h3>
-                      <span>{client?.companyName ?? '—'}</span>
-                    </div>
-                    {renderStatusChip(invoice.status)}
-                  </header>
-                  <p>{invoice.engagement}</p>
-                  <footer>
+    switch (activeView) {
+      case 'builder':
+        return <InvoiceBuilder />
+      case 'invoices':
+        return (
+          <section className="module-card">
+            <header className="module-heading">
+              <div>
+                <h2>All invoices</h2>
+                <p>Monitor billing progress across engagements and status buckets.</p>
+              </div>
+              <button type="button" className="primary" onClick={() => setActiveView('builder')}>
+                Create invoice
+              </button>
+            </header>
+            <div className="invoice-table">
+              <div className="table-head">
+                <span>Invoice</span>
+                <span>Client</span>
+                <span>Engagement</span>
+                <span>Issued</span>
+                <span>Due</span>
+                <span>Status</span>
+                <span>Amount</span>
+              </div>
+              {filteredInvoices.map((invoice) => {
+                const client = CLIENT_DIRECTORY.find((c) => c.id === invoice.clientId)
+                return (
+                  <div key={invoice.id} className="table-row invoice">
                     <span>
-                      Issued {new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(new Date(invoice.issueDate))}
+                      <strong>{invoice.invoiceNumber}</strong>
+                      <small>{invoice.currency}</small>
                     </span>
-                    <strong>
+                    <span>{client?.companyName ?? '—'}</span>
+                    <span>{invoice.engagement}</span>
+                    <span>{invoice.issueDate}</span>
+                    <span>{invoice.dueDate}</span>
+                    <span>{renderStatusChip(invoice.status)}</span>
+                    <span>
                       {new Intl.NumberFormat('en-IN', {
                         style: 'currency',
                         currency: invoice.currency,
                         maximumFractionDigits: 0,
                       }).format(invoice.amount)}
-                    </strong>
-                  </footer>
-                </article>
-              )
-            })}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )
+      case 'clients':
+        return (
+          <div className="operations-grid">
+            <section className="module-card span-2">
+              <header className="module-heading">
+                <div>
+                  <h2>Client portfolio</h2>
+                  <p>Profiles of key retainers with contact and contract visibility.</p>
+                </div>
+                <button type="button" className="outline" onClick={() => setActiveView('builder')}>
+                  Draft invoice
+                </button>
+              </header>
+              <div className="client-grid">
+                {CLIENT_DIRECTORY.map((client) => (
+                  <article key={client.id} className="client-card">
+                    <header>
+                      <h3>{client.companyName}</h3>
+                      <span>{client.contactName}</span>
+                    </header>
+                    <p className="client-meta">{client.email}</p>
+                    <p className="client-meta">{client.phone}</p>
+                    <p className="client-meta">
+                      {[client.city, client.state].filter(Boolean).join(', ')} • {client.country}
+                    </p>
+                    {client.gstin ? <span className="chip">GSTIN: {client.gstin}</span> : null}
+                  </article>
+                ))}
+              </div>
+            </section>
           </div>
-        </section>
-
-        <section className="module-card">
-          <header className="module-heading">
-            <div>
-              <h2>Operational updates</h2>
-              <p>Key actions from finance, delivery, and collections.</p>
-            </div>
-          </header>
-          <div className="activity-feed">{ACTIVITY_LOG.map((activity) => renderActivity(activity))}</div>
-        </section>
-
-        <section className="module-card span-2">
-          <header className="module-heading">
-            <div>
-              <h2>Service catalogue</h2>
-              <p>Standard billing packages across our practice areas.</p>
-            </div>
-          </header>
-          <div className="service-grid">
-            {SERVICE_CATALOG.map((service) => (
-              <article key={service.id} className="service-card">
-                <header>
-                  <h3>{service.name}</h3>
-                  <span className="service-category">{service.category}</span>
-                </header>
-                <p>{service.description}</p>
-                <footer>
-                  <span>{service.unit}</span>
+        )
+      case 'team':
+        return (
+          <div className="operations-grid">
+            <section className="module-card">
+              <header className="module-heading">
+                <div>
+                  <h2>Finance squad roster</h2>
+                  <p>Billing, collections, and delivery partners with current focus areas.</p>
+                </div>
+              </header>
+              <div className="team-grid detailed">
+                {TEAM_MEMBERS.map((member) => (
+                  <article key={member.id} className="team-card focus">
+                    <div className="avatar" style={{ backgroundColor: member.avatarColor }}>
+                      {member.initials}
+                    </div>
+                    <div className="team-details">
+                      <h3>{member.name}</h3>
+                      <span>{member.role}</span>
+                      <p>{member.email}</p>
+                      <div className="chip-row">
+                        <span className="chip">Collections</span>
+                        <span className="chip">Q2 OKRs</span>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          </div>
+        )
+      case 'settings':
+        return (
+          <div className="operations-grid">
+            <section className="module-card">
+              <header className="module-heading">
+                <div>
+                  <h2>Billing console settings</h2>
+                  <p>Control payment preferences, reminders, and notification policies.</p>
+                </div>
+              </header>
+              <div className="settings-panel">
+                <div className="settings-row">
+                  <div>
+                    <h3>Auto reminder cadence</h3>
+                    <p>Send pending invoice nudges every 5 days until payment is confirmed.</p>
+                  </div>
+                  <button type="button" className="toggle on">
+                    Enabled
+                  </button>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <h3>Attach PDF to emails</h3>
+                    <p>Automatically generate and attach branded PDFs for every invoice dispatch.</p>
+                  </div>
+                  <button type="button" className="toggle">
+                    Disabled
+                  </button>
+                </div>
+                <div className="settings-row">
+                  <div>
+                    <h3>Dual approval workflow</h3>
+                    <p>Route invoices above ₹2,00,000 for finance head approval before release.</p>
+                  </div>
+                  <button type="button" className="toggle on">
+                    Enabled
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+        )
+      default:
+        return (
+          <div className="overview-grid">
+            <section className="module-card span-2">
+              <header className="module-heading">
+                <div>
+                  <h2>Invoice health overview</h2>
+                  <p>A snapshot of receivables, fulfilment status, and collection risk.</p>
+                </div>
+                <button type="button" className="outline" onClick={() => setActiveView('invoices')}>
+                  View all invoices
+                </button>
+              </header>
+              <div className="stat-grid">
+                <div className="stat-card primary">
+                  <span className="label">Outstanding receivables</span>
                   <strong>
-                    {new Intl.NumberFormat('en-IN', {
-                      style: 'currency',
-                      currency: 'INR',
-                      maximumFractionDigits: 0,
-                    }).format(service.unitRate)}
+                    {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(
+                      overviewStats.totals.outstanding,
+                    )}
                   </strong>
-                </footer>
-              </article>
-            ))}
-          </div>
-        </section>
+                  <p>Includes pending and overdue invoices awaiting collection.</p>
+                </div>
+                <div className="stat-card">
+                  <span className="label">Draft</span>
+                  <strong>{overviewStats.totals.Draft.toLocaleString('en-IN')}</strong>
+                  <p>Value of invoices saved but not shared with clients.</p>
+                </div>
+                <div className="stat-card">
+                  <span className="label">Pending approval</span>
+                  <strong>{overviewStats.totals.Pending.toLocaleString('en-IN')}</strong>
+                  <p>Invoiced amounts awaiting client confirmation.</p>
+                </div>
+                <div className="stat-card">
+                  <span className="label">Collected</span>
+                  <strong>{overviewStats.totals.Paid.toLocaleString('en-IN')}</strong>
+                  <p>Confirmed payments received this quarter.</p>
+                </div>
+                <div className="stat-card warning">
+                  <span className="label">Overdue</span>
+                  <strong>{overviewStats.totals.Overdue.toLocaleString('en-IN')}</strong>
+                  <p>Requires immediate follow-up from collections team.</p>
+                </div>
+              </div>
+            </section>
 
-        <section className="module-card">
-          <header className="module-heading">
-            <div>
-              <h2>Finance squad</h2>
-              <p>Specialists coordinating billing, strategy, and delivery.</p>
-            </div>
-          </header>
-          <div className="team-grid">
-            {TEAM_MEMBERS.map((member) => (
-              <article key={member.id} className="team-card">
-                <div className="avatar" style={{ backgroundColor: member.avatarColor }}>
-                  {member.initials}
+            <section className="module-card">
+              <header className="module-heading">
+                <div>
+                  <h2>Recent invoices</h2>
+                  <p>Latest invoices sent to strategic accounts.</p>
                 </div>
-                <div className="team-details">
-                  <h3>{member.name}</h3>
-                  <span>{member.role}</span>
-                  <p>{member.email}</p>
+              </header>
+              <div className="invoice-list">
+                {recentInvoices.map((invoice) => {
+                  const client = CLIENT_DIRECTORY.find((c) => c.id === invoice.clientId)
+                  return (
+                    <article key={invoice.id} className="invoice-card">
+                      <header>
+                        <div>
+                          <h3>{invoice.invoiceNumber}</h3>
+                          <span>{client?.companyName ?? '—'}</span>
+                        </div>
+                        {renderStatusChip(invoice.status)}
+                      </header>
+                      <p>{invoice.engagement}</p>
+                      <footer>
+                        <span>
+                          Issued {new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(new Date(invoice.issueDate))}
+                        </span>
+                        <strong>
+                          {new Intl.NumberFormat('en-IN', {
+                            style: 'currency',
+                            currency: invoice.currency,
+                            maximumFractionDigits: 0,
+                          }).format(invoice.amount)}
+                        </strong>
+                      </footer>
+                    </article>
+                  )
+                })}
+              </div>
+            </section>
+
+            <section className="module-card">
+              <header className="module-heading">
+                <div>
+                  <h2>Operational updates</h2>
+                  <p>Key actions from finance, delivery, and collections.</p>
                 </div>
-              </article>
-            ))}
+              </header>
+              <div className="activity-feed">{ACTIVITY_LOG.map((activity) => renderActivity(activity))}</div>
+            </section>
+
+            <section className="module-card span-2">
+              <header className="module-heading">
+                <div>
+                  <h2>Service catalogue</h2>
+                  <p>Standard billing packages across our practice areas.</p>
+                </div>
+              </header>
+              <div className="service-grid">
+                {SERVICE_CATALOG.map((service) => (
+                  <article key={service.id} className="service-card">
+                    <header>
+                      <h3>{service.name}</h3>
+                      <span className="service-category">{service.category}</span>
+                    </header>
+                    <p>{service.description}</p>
+                    <footer>
+                      <span>{service.unit}</span>
+                      <strong>
+                        {new Intl.NumberFormat('en-IN', {
+                          style: 'currency',
+                          currency: 'INR',
+                          maximumFractionDigits: 0,
+                        }).format(service.unitRate)}
+                      </strong>
+                    </footer>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="module-card">
+              <header className="module-heading">
+                <div>
+                  <h2>Finance squad</h2>
+                  <p>Specialists coordinating billing, strategy, and delivery.</p>
+                </div>
+              </header>
+              <div className="team-grid">
+                {TEAM_MEMBERS.map((member) => (
+                  <article key={member.id} className="team-card">
+                    <div className="avatar" style={{ backgroundColor: member.avatarColor }}>
+                      {member.initials}
+                    </div>
+                    <div className="team-details">
+                      <h3>{member.name}</h3>
+                      <span>{member.role}</span>
+                      <p>{member.email}</p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
           </div>
-        </section>
-      </div>
-    )
+        )
+    }
   }
 
   return (
@@ -329,13 +433,25 @@ function App() {
         </nav>
         <nav className="nav-group">
           <p className="nav-label">Operations</p>
-          <button type="button" className={activeView === 'clients' ? 'active disabled' : 'disabled'}>
+          <button
+            type="button"
+            className={activeView === 'clients' ? 'active' : ''}
+            onClick={() => setActiveView('clients')}
+          >
             Client profiles
           </button>
-          <button type="button" className={activeView === 'team' ? 'active disabled' : 'disabled'}>
+          <button
+            type="button"
+            className={activeView === 'team' ? 'active' : ''}
+            onClick={() => setActiveView('team')}
+          >
             Team workload
           </button>
-          <button type="button" className={activeView === 'settings' ? 'active disabled' : 'disabled'}>
+          <button
+            type="button"
+            className={activeView === 'settings' ? 'active' : ''}
+            onClick={() => setActiveView('settings')}
+          >
             Settings
           </button>
         </nav>

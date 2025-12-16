@@ -645,6 +645,15 @@ button.ghost:hover {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  overflow-x: auto;
+  padding-bottom: 0.4rem;
+}
+
+.invoice-builder .line-items-track {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  min-width: 960px;
 }
 
 .invoice-builder .table-head,
@@ -865,6 +874,135 @@ button.ghost:hover {
   color: var(--ink-500);
 }
 
+.operations-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.client-grid {
+  display: grid;
+  gap: 1.2rem;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.client-card {
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(205, 214, 229, 0.7);
+  background: #fff;
+  padding: 1.2rem 1.35rem;
+  display: grid;
+  gap: 0.45rem;
+  box-shadow: 0 12px 24px rgba(15, 33, 64, 0.06);
+}
+
+.client-card header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.client-card h3 {
+  font-size: 1.05rem;
+}
+
+.client-card span {
+  color: var(--ink-300);
+  font-size: 0.88rem;
+}
+
+.client-meta {
+  font-size: 0.88rem;
+  color: var(--ink-600);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  background: rgba(35, 62, 120, 0.12);
+  color: var(--accent-600);
+  font-size: 0.75rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.team-grid.detailed {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.team-card.focus {
+  align-items: stretch;
+  gap: 1.2rem;
+  padding: 1.1rem 1.3rem;
+  border: 1px solid rgba(35, 62, 120, 0.15);
+  box-shadow: 0 16px 32px rgba(35, 62, 120, 0.08);
+}
+
+.team-card.focus .team-details {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.chip-row {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.settings-panel {
+  display: grid;
+  gap: 1.2rem;
+}
+
+.settings-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.1rem 1.25rem;
+  border: 1px solid rgba(205, 214, 229, 0.7);
+  border-radius: var(--radius-sm);
+  background: rgba(245, 247, 251, 0.7);
+}
+
+.settings-row h3 {
+  font-size: 1.05rem;
+  margin-bottom: 0.35rem;
+}
+
+.settings-row p {
+  color: var(--ink-500);
+  font-size: 0.9rem;
+  max-width: 34ch;
+}
+
+.toggle {
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(145, 158, 171, 0.18);
+  color: var(--ink-500);
+  font-size: 0.82rem;
+  border: 1px solid rgba(145, 158, 171, 0.3);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.toggle.on {
+  background: rgba(35, 62, 120, 0.16);
+  border-color: rgba(35, 62, 120, 0.35);
+  color: var(--accent-600);
+}
+
+.toggle:hover {
+  transform: translateY(-1px);
+}
+
 @media (max-width: 1200px) {
   .workspace {
     grid-template-columns: 1fr;
@@ -873,6 +1011,10 @@ button.ghost:hover {
   .preview-panel {
     position: sticky;
     top: 1.5rem;
+  }
+
+  .invoice-builder .line-items-track {
+    min-width: 720px;
   }
 }
 
@@ -890,6 +1032,19 @@ button.ghost:hover {
     text-align: left;
   }
 
+  .operations-grid {
+    gap: 1.25rem;
+  }
+
+  .settings-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .toggle {
+    align-self: flex-start;
+  }
+
   .invoice-builder .field-grid,
   .invoice-builder .table-head,
   .invoice-builder .table-row,
@@ -905,6 +1060,10 @@ button.ghost:hover {
 
   .invoice-builder .line-item-actions {
     justify-content: flex-start;
+  }
+
+  .invoice-builder .line-items-track {
+    min-width: 640px;
   }
 }
 
