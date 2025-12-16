@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, type ChangeEvent } from 'react'
 import './App.css'
 import { CLIENT_DIRECTORY, ORGANIZATION, SERVICE_CATALOG } from './data'
 import type {
@@ -124,7 +124,7 @@ function App() {
     }
   }, [formState.lineItems, formState.taxRate])
 
-  const handleClientSelectChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleClientSelectChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const selectedId = event.target.value
     const selectedProfile = CLIENT_DIRECTORY.find((client) => client.id === selectedId)
     setFormState((prev) => ({
@@ -134,9 +134,7 @@ function App() {
     }))
   }
 
-  const handleClientDetailChange = (
-    event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
-  ) => {
+  const handleClientDetailChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = event.target
     setFormState((prev) => ({
       ...prev,
@@ -147,7 +145,7 @@ function App() {
     }))
   }
 
-  const handleMetaChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMetaChange = (event: ChangeEvent<HTMLInputElement>) => {
     const { name, value } = event.target
     setFormState((prev) => ({
       ...prev,
@@ -158,7 +156,7 @@ function App() {
     }))
   }
 
-  const handleCurrencyChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleCurrencyChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const { value } = event.target
     setFormState((prev) => ({
       ...prev,
@@ -166,7 +164,7 @@ function App() {
     }))
   }
 
-  const handleTaxRateChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleTaxRateChange = (event: ChangeEvent<HTMLInputElement>) => {
     const nextValue = Number(event.target.value)
     setFormState((prev) => ({
       ...prev,
@@ -174,14 +172,14 @@ function App() {
     }))
   }
 
-  const handleTermsChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleTermsChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     setFormState((prev) => ({
       ...prev,
       terms: event.target.value,
     }))
   }
 
-  const handleAdditionalNoteChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+  const handleAdditionalNoteChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
     setFormState((prev) => ({
       ...prev,
       additionalNote: event.target.value,
