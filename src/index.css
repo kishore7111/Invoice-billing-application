@@ -1,0 +1,91 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Serif:wght@400;500;600&display=swap');
+
+:root {
+  color-scheme: light;
+  --ink-900: #091322;
+  --ink-700: #253044;
+  --ink-500: #4c5a6f;
+  --ink-300: #7e8ba1;
+  --ink-100: #c7cedb;
+  --accent-600: #233e78;
+  --accent-500: #2f4f96;
+  --accent-100: #e9effc;
+  --surface-0: #f5f7fb;
+  --surface-card: #ffffff;
+  --border: #d9dfeb;
+  --radius-md: 14px;
+  --radius-sm: 8px;
+  --shadow-card: 0 18px 40px rgba(15, 33, 64, 0.08);
+  font-family: 'IBM Plex Sans', sans-serif;
+  font-weight: 400;
+  line-height: 1.6;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 2.5rem;
+  min-height: 100vh;
+  background: radial-gradient(120% 120% at 0% 0%, #f0f4ff 0%, #eef1f7 45%, #f7f8fb 100%);
+  color: var(--ink-700);
+}
+
+#root {
+  min-height: calc(100vh - 5rem);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  margin: 0;
+  font-family: 'IBM Plex Serif', 'IBM Plex Sans', serif;
+  font-weight: 500;
+  color: var(--ink-900);
+}
+
+p {
+  margin: 0;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+a {
+  color: var(--accent-500);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 768px) {
+  body {
+    padding: 1.5rem 1rem;
+  }
+}
+
+@media print {
+  body {
+    padding: 0;
+    background: #ffffff;
+  }
+
+  #root {
+    min-height: auto;
+  }
+}
