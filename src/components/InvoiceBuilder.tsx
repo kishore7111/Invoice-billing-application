@@ -1,18 +1,20 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
+import { useMemo, useRef, useState, type ChangeEvent } from 'react'
 import '../App.css'
-import { CLIENT_DIRECTORY, ORGANIZATION, PAYMENT_GATEWAY, SERVICE_CATALOG } from '../data'
+import { CLIENT_DIRECTORY, ORGANIZATION, SERVICE_CATALOG } from '../data'
 import type {
   ClientDetails,
   ClientProfile,
+  Currency,
   InvoiceFormState,
   LineItem,
   Service,
 } from '../types'
 
-const currencyLocaleMap: Record<InvoiceFormState['currency'], string> = {
+const currencyLocaleMap: Record<Currency, string> = {
   INR: 'en-IN',
   USD: 'en-US',
   EUR: 'de-DE',
+  GBP: 'en-GB',
 }
 
 const emptyClientDetails: ClientDetails = {
@@ -59,7 +61,7 @@ const createLineItem = (service?: Service): LineItem => ({
   description: service?.description ?? '',
   quantity: 1,
   unitPrice: service?.unitRate ?? 0,
-  discountRate: 0,
+  discount: { type: 'Percentage', value: 0 },
   notes: '',
 })
 
@@ -70,7 +72,8 @@ const createInitialState = (): InvoiceFormState => {
     clientSelectionId: defaultClient?.id ?? '',
     client: defaultClient ? toClientDetails(defaultClient) : { ...emptyClientDetails },
     currency: 'INR',
-    taxRate: 18,
+    taxConfig: { type: 'GST', rate: 18, isInclusive: false },
+    discount: { type: 'Percentage', value: 0 },
     lineItems: [createLineItem(SERVICE_CATALOG[0])],
     meta: {
       invoiceNumber: `ADS-${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}${String(today.getDate()).padStart(2, '0')}-${generateId()}`,
@@ -80,6 +83,7 @@ const createInitialState = (): InvoiceFormState => {
       purchaseOrder: '',
       reference: '',
     },
+    recurring: { isEnabled: false, interval: 'monthly' },
     terms:
       'Payment due within 15 days from the invoice date. Please remit via bank transfer to the account listed. Late payments accrue a 2% monthly finance charge.',
     additionalNote: '',
@@ -93,41 +97,8 @@ const serviceLookup = SERVICE_CATALOG.reduce<Record<string, Service>>((acc, serv
 
 export const InvoiceBuilder = () => {
   const [formState, setFormState] = useState<InvoiceFormState>(() => createInitialState())
-  const [layoutMode, setLayoutMode] = useState<'split' | 'form' | 'preview'>('form')
+  const layoutMode = 'split'
   const previewRef = useRef<HTMLDivElement>(null)
-  const hasUserSelectedLayout = useRef(false)
-  const gatewayChannels = useMemo(() => PAYMENT_GATEWAY.channels.filter((channel) => channel.status !== 'Disabled'), [])
-  const preferredGatewayChannel = useMemo(
-    () => gatewayChannels.find((channel) => channel.status === 'Enabled') ?? gatewayChannels[0],
-    [gatewayChannels],
-  )
-  const acceptedChannelSummary = useMemo(() => gatewayChannels.map((channel) => channel.label).join(' • '), [gatewayChannels])
-
-  useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) {
-      setLayoutMode('split')
-      return
-    }
-
-    const mediaQuery = window.matchMedia('(min-width: 1280px)')
-
-    const applyLayout = (matches: boolean) => {
-      if (hasUserSelectedLayout.current) {
-        return
-      }
-      setLayoutMode(matches ? 'split' : 'form')
-    }
-
-    applyLayout(mediaQuery.matches)
-
-    const listener = (event: MediaQueryListEvent) => {
-      applyLayout(event.matches)
-    }
-
-    mediaQuery.addEventListener('change', listener)
-
-    return () => mediaQuery.removeEventListener('change', listener)
-  }, [])
 
   const currencyFormatter = useMemo(
     () =>
@@ -141,22 +112,33 @@ export const InvoiceBuilder = () => {
   )
 
   const totals = useMemo(() => {
-    const subtotal = formState.lineItems.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0)
-    const discountTotal = formState.lineItems.reduce(
-      (sum, item) => sum + (item.quantity * item.unitPrice * item.discountRate) / 100,
-      0,
-    )
-    const taxableAmount = Math.max(subtotal - discountTotal, 0)
-    const taxAmount = (taxableAmount * formState.taxRate) / 100
-    const total = taxableAmount + taxAmount
+    let subtotal = 0
+    let lineDiscounts = 0
+
+    formState.lineItems.forEach(item => {
+      const lineBase = item.quantity * item.unitPrice
+      const disc = item.discount.type === 'Percentage'
+        ? (lineBase * item.discount.value) / 100
+        : item.discount.value
+      subtotal += lineBase
+      lineDiscounts += disc
+    })
+
+    const taxableAmount = Math.max(subtotal - lineDiscounts, 0)
+    const taxAmount = formState.taxConfig.isInclusive
+      ? (taxableAmount * formState.taxConfig.rate) / (100 + formState.taxConfig.rate)
+      : (taxableAmount * formState.taxConfig.rate) / 100
+
+    const total = formState.taxConfig.isInclusive ? taxableAmount : taxableAmount + taxAmount
+
     return {
       subtotal,
-      discountTotal,
+      lineDiscounts,
       taxableAmount,
       taxAmount,
       total,
     }
-  }, [formState.lineItems, formState.taxRate])
+  }, [formState.lineItems, formState.taxConfig])
 
   const handleClientSelectChange = (event: ChangeEvent<HTMLSelectElement>) => {
     const selectedId = event.target.value
@@ -168,674 +150,244 @@ export const InvoiceBuilder = () => {
     }))
   }
 
-  const handleClientDetailChange = (event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = event.target
-    setFormState((prev) => ({
+  const handleFieldChange = (section: keyof InvoiceFormState, field: string, value: any) => {
+    setFormState(prev => {
+      const sectionValue = prev[section]
+      if (typeof sectionValue === 'object' && !Array.isArray(sectionValue) && sectionValue !== null) {
+        return {
+          ...prev,
+          [section]: { ...sectionValue, [field]: value }
+        }
+      }
+      return {
+        ...prev,
+        [section]: value
+      }
+    })
+  }
+
+  const handleLineItemChange = (id: string, field: string, value: any) => {
+    setFormState(prev => ({
       ...prev,
-      client: {
-        ...prev.client,
-        [name]: value,
-      },
+      lineItems: prev.lineItems.map(item => {
+        if (item.id !== id) return item
+        if (field === 'discountValue') return { ...item, discount: { ...item.discount, value: Number(value) } }
+        if (field === 'discountType') return { ...item, discount: { ...item.discount, type: value } }
+        return { ...item, [field]: value }
+      })
     }))
   }
 
-  const handleMetaChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = event.target
-    setFormState((prev) => ({
-      ...prev,
-      meta: {
-        ...prev.meta,
-        [name]: value,
-      },
-    }))
-  }
-
-  const handleCurrencyChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    const { value } = event.target
-    setFormState((prev) => ({
-      ...prev,
-      currency: value as InvoiceFormState['currency'],
-    }))
-  }
-
-  const handleTaxRateChange = (event: ChangeEvent<HTMLInputElement>) => {
-    const nextValue = Number(event.target.value)
-    setFormState((prev) => ({
-      ...prev,
-      taxRate: Number.isNaN(nextValue) ? prev.taxRate : Math.max(nextValue, 0),
-    }))
-  }
-
-  const handleTermsChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    setFormState((prev) => ({
-      ...prev,
-      terms: event.target.value,
-    }))
-  }
-
-  const handleAdditionalNoteChange = (event: ChangeEvent<HTMLTextAreaElement>) => {
-    setFormState((prev) => ({
-      ...prev,
-      additionalNote: event.target.value,
-    }))
-  }
-
-  const handleLineItemFieldChange = <T extends keyof LineItem>(
-    id: string,
-    field: T,
-    value: LineItem[T],
-  ) => {
-    setFormState((prev) => ({
-      ...prev,
-      lineItems: prev.lineItems.map((item) => (item.id === id ? { ...item, [field]: value } : item)),
-    }))
-  }
-
-  const handleServiceChange = (id: string, serviceId: string) => {
+  const handleServiceSelect = (id: string, serviceId: string) => {
     const service = serviceLookup[serviceId]
-    setFormState((prev) => ({
+    if (!service) return
+    setFormState(prev => ({
       ...prev,
-      lineItems: prev.lineItems.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              serviceId,
-              description: service ? service.description : item.description,
-              unitPrice: service ? service.unitRate : item.unitPrice,
-            }
-          : item,
-      ),
+      lineItems: prev.lineItems.map(item =>
+        item.id === id ? {
+          ...item,
+          serviceId,
+          description: service.description,
+          unitPrice: service.unitRate
+        } : item
+      )
     }))
   }
-
-  const handleAddLineItem = () => {
-    setFormState((prev) => ({
-      ...prev,
-      lineItems: [...prev.lineItems, createLineItem()],
-    }))
-  }
-
-  const handleRemoveLineItem = (id: string) => {
-    setFormState((prev) => ({
-      ...prev,
-      lineItems: prev.lineItems.length > 1 ? prev.lineItems.filter((item) => item.id !== id) : prev.lineItems,
-    }))
-  }
-
-  const handleGenerateInvoice = () => {
-    previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
-
-  const handlePrintInvoice = () => {
-    if (typeof window !== 'undefined') {
-      window.print()
-    }
-  }
-
-  const handleLayoutModeChange = (mode: 'split' | 'form' | 'preview') => {
-    hasUserSelectedLayout.current = true
-    setLayoutMode(mode)
-    if (mode === 'preview') {
-      previewRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    }
-  }
-
-  const workspaceClassName = `workspace layout-${layoutMode}`
-  const formPanelClassName = `form-panel${layoutMode === 'preview' ? ' is-hidden' : ''}`
-  const previewPanelClassName = `preview-panel${layoutMode === 'form' ? ' is-hidden' : ''}`
 
   return (
-    <div className="invoice-builder">
-      <header className="page-header">
-        <div>
-          <p className="organization-tagline">{ORGANIZATION.tagline}</p>
-          <h1>{ORGANIZATION.displayName}</h1>
-        </div>
-        <div className="org-contact-block">
-          <p>{ORGANIZATION.address.line1}</p>
-          <p>
-            {ORGANIZATION.address.line2}
-            {ORGANIZATION.address.line2 ? ', ' : ''}
-            {ORGANIZATION.address.city}, {ORGANIZATION.address.state} {ORGANIZATION.address.postalCode}
-          </p>
-          <p>{ORGANIZATION.address.country}</p>
-          <p>{ORGANIZATION.taxRegistration}</p>
-          <p>
-            {ORGANIZATION.contact.phone} • {ORGANIZATION.contact.email}
-          </p>
-          <p>{ORGANIZATION.contact.website}</p>
-        </div>
-      </header>
-
-      <div className="action-toolbar">
-        <button type="button" className="primary" onClick={handleGenerateInvoice}>
-          Generate Invoice Preview
-        </button>
-        <button type="button" className="outline" onClick={handlePrintInvoice}>
-          Print Invoice
-        </button>
-        <div className="layout-toggle" role="group" aria-label="Invoice layout mode">
-          <button
-            type="button"
-            className={layoutMode === 'form' ? 'active' : ''}
-            onClick={() => handleLayoutModeChange('form')}
-          >
-            Form only
-          </button>
-          <button
-            type="button"
-            className={layoutMode === 'split' ? 'active' : ''}
-            onClick={() => handleLayoutModeChange('split')}
-          >
-            Split view
-          </button>
-          <button
-            type="button"
-            className={layoutMode === 'preview' ? 'active' : ''}
-            onClick={() => handleLayoutModeChange('preview')}
-          >
-            Preview only
-          </button>
-        </div>
-      </div>
-
-      <main className={workspaceClassName}>
-        <section className={formPanelClassName}>
-          <h2>Invoice Builder</h2>
-
-          <div className="form-section">
-            <div className="section-heading">
-              <h3>Client Information</h3>
-              <span className="section-hint">Select an existing client or customise details.</span>
+    <div className="invoice-builder-layout" style={{ display: 'grid', gridTemplateColumns: layoutMode === 'split' ? '1.5fr 1fr' : '1fr', gap: '2rem' }}>
+      <section className="form-panel" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <div className="module-card">
+          <header className="module-heading"><h2>Client & Meta</h2></header>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div className="field">
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--slate-500)', marginBottom: '0.4rem' }}>Client Profile</label>
+              <select value={formState.clientSelectionId} onChange={handleClientSelectChange} style={{ width: '100%', padding: '0.625rem', borderRadius: 'var(--radius-base)', border: '1px solid var(--border-light)' }}>
+                <option value="">Custom</option>
+                {CLIENT_DIRECTORY.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
+              </select>
             </div>
-            <div className="field-grid">
-              <label className="field">
-                <span>Client profile</span>
-                <select value={formState.clientSelectionId} onChange={handleClientSelectChange}>
-                  <option value="">Custom client</option>
-                  {CLIENT_DIRECTORY.map((client) => (
-                    <option key={client.id} value={client.id}>
-                      {client.companyName}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="field">
-                <span>Company name</span>
-                <input
-                  name="companyName"
-                  value={formState.client.companyName}
-                  onChange={handleClientDetailChange}
-                  placeholder="Enter client company"
-                />
-              </label>
-              <label className="field">
-                <span>Primary contact</span>
-                <input
-                  name="contactName"
-                  value={formState.client.contactName}
-                  onChange={handleClientDetailChange}
-                  placeholder="Requester name"
-                />
-              </label>
-              <label className="field">
-                <span>Email</span>
-                <input
-                  name="email"
-                  type="email"
-                  value={formState.client.email}
-                  onChange={handleClientDetailChange}
-                  placeholder="billing@email.com"
-                />
-              </label>
-              <label className="field">
-                <span>Phone</span>
-                <input
-                  name="phone"
-                  value={formState.client.phone}
-                  onChange={handleClientDetailChange}
-                  placeholder="+91"
-                />
-              </label>
-              <label className="field">
-                <span>GSTIN / Tax ID</span>
-                <input
-                  name="gstin"
-                  value={formState.client.gstin ?? ''}
-                  onChange={handleClientDetailChange}
-                  placeholder="Tax registration"
-                />
-              </label>
-              <label className="field field-wide">
-                <span>Address line 1</span>
-                <input
-                  name="addressLine1"
-                  value={formState.client.addressLine1}
-                  onChange={handleClientDetailChange}
-                  placeholder="Street address"
-                />
-              </label>
-              <label className="field field-wide">
-                <span>Address line 2</span>
-                <input
-                  name="addressLine2"
-                  value={formState.client.addressLine2 ?? ''}
-                  onChange={handleClientDetailChange}
-                  placeholder="Suite, floor, etc."
-                />
-              </label>
-              <label className="field">
-                <span>City</span>
-                <input
-                  name="city"
-                  value={formState.client.city}
-                  onChange={handleClientDetailChange}
-                  placeholder="City"
-                />
-              </label>
-              <label className="field">
-                <span>State</span>
-                <input
-                  name="state"
-                  value={formState.client.state}
-                  onChange={handleClientDetailChange}
-                  placeholder="State"
-                />
-              </label>
-              <label className="field">
-                <span>Postal code</span>
-                <input
-                  name="postalCode"
-                  value={formState.client.postalCode}
-                  onChange={handleClientDetailChange}
-                  placeholder="Postal code"
-                />
-              </label>
-              <label className="field">
-                <span>Country</span>
-                <input
-                  name="country"
-                  value={formState.client.country}
-                  onChange={handleClientDetailChange}
-                  placeholder="Country"
-                />
-              </label>
+            <div className="field">
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--slate-500)', marginBottom: '0.4rem' }}>Currency</label>
+              <select value={formState.currency} onChange={e => handleFieldChange('currency', '', e.target.value)} style={{ width: '100%', padding: '0.625rem', borderRadius: 'var(--radius-base)', border: '1px solid var(--border-light)' }}>
+                <option value="INR">INR</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+              </select>
+            </div>
+            <div className="field">
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--slate-500)', marginBottom: '0.4rem' }}>Invoice #</label>
+              <input value={formState.meta.invoiceNumber} onChange={e => handleFieldChange('meta', 'invoiceNumber', e.target.value)} style={{ width: '100%', padding: '0.625rem', borderRadius: 'var(--radius-base)', border: '1px solid var(--border-light)' }} />
+            </div>
+            <div className="field">
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 600, color: 'var(--slate-500)', marginBottom: '0.4rem' }}>Due Date</label>
+              <input type="date" value={formState.meta.dueDate} onChange={e => handleFieldChange('meta', 'dueDate', e.target.value)} style={{ width: '100%', padding: '0.625rem', borderRadius: 'var(--radius-base)', border: '1px solid var(--border-light)' }} />
             </div>
           </div>
+        </div>
 
-          <div className="form-section">
-            <div className="section-heading">
-              <h3>Invoice Details</h3>
-              <span className="section-hint">Standardised identifiers for finance reconciliation.</span>
-            </div>
-            <div className="field-grid">
-              <label className="field">
-                <span>Invoice number</span>
-                <input
-                  name="invoiceNumber"
-                  value={formState.meta.invoiceNumber}
-                  onChange={handleMetaChange}
-                />
-              </label>
-              <label className="field">
-                <span>Issue date</span>
-                <input
-                  type="date"
-                  name="issueDate"
-                  value={formState.meta.issueDate}
-                  onChange={handleMetaChange}
-                />
-              </label>
-              <label className="field">
-                <span>Due date</span>
-                <input type="date" name="dueDate" value={formState.meta.dueDate} onChange={handleMetaChange} />
-              </label>
-              <label className="field">
-                <span>Project / engagement</span>
-                <input
-                  name="projectName"
-                  value={formState.meta.projectName}
-                  onChange={handleMetaChange}
-                  placeholder="e.g. Digital Growth Retainer"
-                />
-              </label>
-              <label className="field">
-                <span>Purchase order</span>
-                <input
-                  name="purchaseOrder"
-                  value={formState.meta.purchaseOrder}
-                  onChange={handleMetaChange}
-                  placeholder="Optional reference"
-                />
-              </label>
-              <label className="field">
-                <span>Internal reference</span>
-                <input
-                  name="reference"
-                  value={formState.meta.reference}
-                  onChange={handleMetaChange}
-                  placeholder="Account manager, etc."
-                />
-              </label>
-              <label className="field">
-                <span>Currency</span>
-                <select value={formState.currency} onChange={handleCurrencyChange}>
-                  <option value="INR">INR</option>
-                  <option value="USD">USD</option>
-                  <option value="EUR">EUR</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>Tax rate (%)</span>
-                <input
-                  type="number"
-                  min={0}
-                  step={0.5}
-                  value={formState.taxRate}
-                  onChange={handleTaxRateChange}
-                />
-              </label>
-            </div>
-          </div>
-
-          <div className="form-section">
-            <div className="section-heading">
-              <h3>Line Items</h3>
-              <span className="section-hint">Select billable services and tailor descriptions per engagement.</span>
-            </div>
-            <div className="line-items-table">
-              <div className="line-items-track">
-                <div className="table-head">
-                  <span>Service</span>
-                  <span>Description</span>
-                  <span>Unit price</span>
-                  <span>Quantity</span>
-                  <span>Discount %</span>
-                  <span>Amount</span>
-                  <span></span>
+        <div className="module-card">
+          <header className="module-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <h2>Line Items</h2>
+            <button className="outline" style={{ padding: '0.4rem 0.8rem', fontSize: '0.8rem' }} onClick={() => setFormState(prev => ({ ...prev, lineItems: [...prev.lineItems, createLineItem()] }))}>+ Add Item</button>
+          </header>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {formState.lineItems.map(item => (
+              <div key={item.id} style={{ padding: '1rem', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-base)', background: 'var(--slate-50)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 0.8fr 0.5fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                  <select value={item.serviceId} onChange={e => handleServiceSelect(item.id, e.target.value)} style={{ padding: '0.5rem', borderRadius: 'var(--radius-base)', border: '1px solid var(--border-light)' }}>
+                    <option value="">Select Service</option>
+                    {SERVICE_CATALOG.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  <input type="number" value={item.unitPrice} onChange={e => handleLineItemChange(item.id, 'unitPrice', Number(e.target.value))} placeholder="Price" style={{ padding: '0.5rem', borderRadius: 'var(--radius-base)', border: '1px solid var(--border-light)' }} />
+                  <input type="number" value={item.quantity} onChange={e => handleLineItemChange(item.id, 'quantity', Number(e.target.value))} placeholder="Qty" style={{ padding: '0.5rem', borderRadius: 'var(--radius-base)', border: '1px solid var(--border-light)' }} />
                 </div>
-                {formState.lineItems.map((item) => {
-                  const service = item.serviceId ? serviceLookup[item.serviceId] : undefined
-                  const lineBase = item.quantity * item.unitPrice
-                  const lineDiscount = (lineBase * item.discountRate) / 100
-                  const lineTotal = lineBase - lineDiscount
-                  return (
-                    <div className="table-row" key={item.id}>
-                      <div className="cell">
-                        <select value={item.serviceId} onChange={(event) => handleServiceChange(item.id, event.target.value)}>
-                          <option value="">Select service</option>
-                          {SERVICE_CATALOG.map((svc) => (
-                            <option key={svc.id} value={svc.id}>
-                              {svc.name}
-                            </option>
-                          ))}
-                        </select>
-                        {service ? <small className="cell-sub">{service.unit}</small> : null}
-                      </div>
-                      <div className="cell">
-                        <textarea
-                          value={item.description}
-                          onChange={(event) => handleLineItemFieldChange(item.id, 'description', event.target.value)}
-                          rows={3}
-                        />
-                        <textarea
-                          className="note"
-                          placeholder="Internal notes or deliverable highlights (optional)"
-                          value={item.notes ?? ''}
-                          onChange={(event) => handleLineItemFieldChange(item.id, 'notes', event.target.value)}
-                          rows={2}
-                        />
-                      </div>
-                      <div className="cell">
-                        <input
-                          type="number"
-                          min={0}
-                          step={0.01}
-                          value={item.unitPrice}
-                          onChange={(event) =>
-                            handleLineItemFieldChange(item.id, 'unitPrice', Number(event.target.value) || 0)
-                          }
-                        />
-                      </div>
-                      <div className="cell">
-                        <input
-                          type="number"
-                          min={0}
-                          step={0.5}
-                          value={item.quantity}
-                          onChange={(event) =>
-                            handleLineItemFieldChange(item.id, 'quantity', Number(event.target.value) || 0)
-                          }
-                        />
-                      </div>
-                      <div className="cell">
-                        <input
-                          type="number"
-                          min={0}
-                          max={100}
-                          step={0.5}
-                          value={item.discountRate}
-                          onChange={(event) =>
-                            handleLineItemFieldChange(item.id, 'discountRate', Number(event.target.value) || 0)
-                          }
-                        />
-                      </div>
-                      <div className="cell monetary">{currencyFormatter.format(lineTotal || 0)}</div>
-                      <div className="cell actions">
-                        <button type="button" className="ghost" onClick={() => handleRemoveLineItem(item.id)}>
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
+                <textarea value={item.description} onChange={e => handleLineItemChange(item.id, 'description', e.target.value)} placeholder="Description" style={{ width: '100%', minHeight: '60px', padding: '0.5rem', borderRadius: 'var(--radius-base)', border: '1px solid var(--border-light)', marginBottom: '0.75rem' }} />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>Discount:</span>
+                    <input type="number" value={item.discount.value} onChange={e => handleLineItemChange(item.id, 'discountValue', e.target.value)} style={{ width: '60px', padding: '0.4rem', borderRadius: 'var(--radius-base)', border: '1px solid var(--border-light)' }} />
+                    <select value={item.discount.type} onChange={e => handleLineItemChange(item.id, 'discountType', e.target.value)} style={{ padding: '0.4rem', borderRadius: 'var(--radius-base)', border: '1px solid var(--border-light)' }}>
+                      <option value="Percentage">%</option>
+                      <option value="Fixed">Fix</option>
+                    </select>
+                  </div>
+                  <button onClick={() => setFormState(prev => ({ ...prev, lineItems: prev.lineItems.filter(i => i.id !== item.id) }))} style={{ color: 'var(--rose-600)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.875rem' }}>Remove</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="module-card">
+          <header className="module-heading"><h2>Billing Options</h2></header>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+            <div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', fontWeight: 600, fontSize: '0.875rem' }}>
+                <input type="checkbox" checked={formState.recurring.isEnabled} onChange={e => handleFieldChange('recurring', 'isEnabled', e.target.checked)} />
+                Enable Recurring
+              </label>
+              {formState.recurring.isEnabled && (
+                <select value={formState.recurring.interval} onChange={e => handleFieldChange('recurring', 'interval', e.target.value)} style={{ marginTop: '0.75rem', width: '100%', padding: '0.5rem', borderRadius: 'var(--radius-base)', border: '1px solid var(--border-light)' }}>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="quarterly">Quarterly</option>
+                </select>
+              )}
+            </div>
+            <div>
+              <label style={{ display: 'block', fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.5rem' }}>Tax Config</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input type="number" value={formState.taxConfig.rate} onChange={e => handleFieldChange('taxConfig', 'rate', Number(e.target.value))} style={{ width: '60px', padding: '0.5rem', borderRadius: 'var(--radius-base)', border: '1px solid var(--border-light)' }} />
+                <select value={formState.taxConfig.type} onChange={e => handleFieldChange('taxConfig', 'type', e.target.value)} style={{ flex: 1, padding: '0.5rem', borderRadius: 'var(--radius-base)', border: '1px solid var(--border-light)' }}>
+                  <option value="GST">GST</option>
+                  <option value="VAT">VAT</option>
+                  <option value="None">None</option>
+                </select>
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.75rem', fontSize: '0.8rem' }}>
+                <input type="checkbox" checked={formState.taxConfig.isInclusive} onChange={e => handleFieldChange('taxConfig', 'isInclusive', e.target.checked)} />
+                Tax Inclusive
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="preview-panel" ref={previewRef} style={{ position: 'sticky', top: '2rem' }}>
+        <div className="module-card" style={{ padding: '3rem', minHeight: '900px', display: 'flex', flexDirection: 'column', color: 'var(--slate-800)', boxShadow: 'var(--shadow-lg)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '3px solid var(--slate-900)', paddingBottom: '2rem', marginBottom: '2.5rem' }}>
+            <div>
+              <h1 style={{ fontSize: '2.5rem', textTransform: 'uppercase', letterSpacing: '0.15em', fontWeight: 800, margin: 0 }}>Invoice</h1>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.25rem' }}>Reference: {formState.meta.invoiceNumber}</p>
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <h3 style={{ fontSize: '1.4rem', margin: 0 }}>{ORGANIZATION.legalName}</h3>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{ORGANIZATION.address.city}, {ORGANIZATION.address.country}</p>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4rem', marginBottom: '3.5rem' }}>
+            <div>
+              <h4 style={{ textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 800, color: 'var(--slate-400)', letterSpacing: '0.1em', marginBottom: '0.75rem' }}>Bill Recipient</h4>
+              <p style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>{formState.client.companyName || '—'}</p>
+              <p style={{ margin: '0.25rem 0' }}>{formState.client.addressLine1}</p>
+              <p style={{ margin: 0 }}>{formState.client.city}, {formState.client.country}</p>
+              {formState.client.gstin && <p style={{ fontSize: '0.8rem', fontWeight: 600, marginTop: '0.75rem', background: 'var(--slate-100)', display: 'inline-block', padding: '0.2rem 0.5rem', borderRadius: '4px' }}>VAT/GST: {formState.client.gstin}</p>}
+            </div>
+            <div style={{ textAlign: 'right' }}>
+              <div style={{ marginBottom: '0.5rem' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--slate-400)' }}>DATED:</span>
+                <span style={{ marginLeft: '1rem', fontWeight: 600 }}>{formState.meta.issueDate}</span>
+              </div>
+              <div>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--slate-400)' }}>DUE:</span>
+                <span style={{ marginLeft: '1rem', fontWeight: 700, color: 'var(--rose-600)' }}>{formState.meta.dueDate}</span>
               </div>
             </div>
-            <div className="line-item-actions">
-              <button type="button" className="outline" onClick={handleAddLineItem}>
-                Add line item
-              </button>
-            </div>
           </div>
 
-          <div className="form-section">
-            <div className="section-heading">
-              <h3>Terms &amp; Notes</h3>
-              <span className="section-hint">Set payment expectations and contextual remarks.</span>
-            </div>
-            <div className="field-grid single">
-              <label className="field field-wide">
-                <span>Payment terms</span>
-                <textarea value={formState.terms} rows={4} onChange={handleTermsChange} />
-              </label>
-              <label className="field field-wide">
-                <span>Additional note</span>
-                <textarea
-                  value={formState.additionalNote}
-                  rows={3}
-                  placeholder="Thank you message, delivery summary, or contextual briefing."
-                  onChange={handleAdditionalNoteChange}
-                />
-              </label>
-            </div>
-          </div>
-        </section>
+          <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '4rem' }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid var(--slate-900)', textAlign: 'left', fontSize: '0.75rem', textTransform: 'uppercase', fontWeight: 800 }}>
+                <th style={{ padding: '1rem 0' }}>Description</th>
+                <th style={{ padding: '1rem 0', textAlign: 'right', width: '60px' }}>Qty</th>
+                <th style={{ padding: '1rem 0', textAlign: 'right', width: '120px' }}>Rate</th>
+                <th style={{ padding: '1rem 0', textAlign: 'right', width: '120px' }}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {formState.lineItems.map(item => (
+                <tr key={item.id} style={{ borderBottom: '1px solid var(--slate-200)' }}>
+                  <td style={{ padding: '1.25rem 0' }}>
+                    <p style={{ fontWeight: 700, margin: 0 }}>{serviceLookup[item.serviceId]?.name || 'Custom Service'}</p>
+                    <p style={{ fontSize: '0.875rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>{item.description}</p>
+                  </td>
+                  <td style={{ padding: '1.25rem 0', textAlign: 'right' }}>{item.quantity}</td>
+                  <td style={{ padding: '1.25rem 0', textAlign: 'right' }}>{currencyFormatter.format(item.unitPrice)}</td>
+                  <td style={{ padding: '1.25rem 0', textAlign: 'right', fontWeight: 600 }}>{currencyFormatter.format(item.quantity * item.unitPrice)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
 
-        <section className={previewPanelClassName} ref={previewRef}>
-          <div className="preview-header">
-            <div>
-              <h2>Invoice</h2>
-              <p className="invoice-number">{formState.meta.invoiceNumber}</p>
-            </div>
-            <div className="preview-meta">
-              <p>
-                <span>Issued:</span> {formState.meta.issueDate}
-              </p>
-              <p>
-                <span>Due:</span> {formState.meta.dueDate}
-              </p>
-              {formState.meta.purchaseOrder ? (
-                <p>
-                  <span>PO:</span> {formState.meta.purchaseOrder}
-                </p>
-              ) : null}
-              {formState.meta.reference ? (
-                <p>
-                  <span>Ref:</span> {formState.meta.reference}
-                </p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="preview-entities">
-            <div>
-              <h4>From</h4>
-              <p>{ORGANIZATION.legalName}</p>
-              <p>{ORGANIZATION.address.line1}</p>
-              <p>
-                {ORGANIZATION.address.line2}
-                {ORGANIZATION.address.line2 ? ', ' : ''}
-                {ORGANIZATION.address.city}, {ORGANIZATION.address.state} {ORGANIZATION.address.postalCode}
-              </p>
-              <p>{ORGANIZATION.address.country}</p>
-              <p>{ORGANIZATION.taxRegistration}</p>
-              <p>{ORGANIZATION.contact.email}</p>
-              <p>{ORGANIZATION.contact.phone}</p>
-            </div>
-            <div>
-              <h4>Bill to</h4>
-              <p>{formState.client.companyName || '—'}</p>
-              {formState.client.contactName ? <p>Attn: {formState.client.contactName}</p> : null}
-              {formState.client.addressLine1 ? <p>{formState.client.addressLine1}</p> : null}
-              {formState.client.addressLine2 ? <p>{formState.client.addressLine2}</p> : null}
-              <p>
-                {[formState.client.city, formState.client.state].filter(Boolean).join(', ')}{' '}
-                {formState.client.postalCode}
-              </p>
-              <p>{formState.client.country}</p>
-              {formState.client.gstin ? <p>Tax ID: {formState.client.gstin}</p> : null}
-              {formState.client.email ? <p>{formState.client.email}</p> : null}
-              {formState.client.phone ? <p>{formState.client.phone}</p> : null}
-            </div>
-            <div>
-              <h4>Engagement</h4>
-              <p>{formState.meta.projectName || '—'}</p>
-              {formState.additionalNote ? (
-                <p className="highlight-note">{formState.additionalNote}</p>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="preview-table">
-            <div className="preview-table-head">
-              <span>Service</span>
-              <span>Description</span>
-              <span>Qty</span>
-              <span>Unit price</span>
-              <span>Discount</span>
-              <span>Amount</span>
-            </div>
-            {formState.lineItems.map((item) => {
-              const service = item.serviceId ? serviceLookup[item.serviceId] : undefined
-              const lineBase = item.quantity * item.unitPrice
-              const lineDiscount = (lineBase * item.discountRate) / 100
-              const lineTotal = lineBase - lineDiscount
-              return (
-                <div className="preview-table-row" key={item.id}>
-                  <span>
-                    {service ? service.name : 'Custom service'}
-                    {service ? <em>{service.category}</em> : null}
-                  </span>
-                  <span>
-                    {item.description || '—'}
-                    {item.notes ? <small>{item.notes}</small> : null}
-                  </span>
-                  <span>{item.quantity}</span>
-                  <span>{currencyFormatter.format(item.unitPrice)}</span>
-                  <span>{item.discountRate ? `${item.discountRate}%` : '—'}</span>
-                  <span>{currencyFormatter.format(lineTotal)}</span>
-                </div>
-              )
-            })}
-          </div>
-
-          <div className="totals-panel">
-            <div>
-              <span>Subtotal</span>
+          <div style={{ marginLeft: 'auto', width: '320px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+              <span style={{ fontWeight: 600 }}>Subtotal</span>
               <span>{currencyFormatter.format(totals.subtotal)}</span>
             </div>
-            <div>
-              <span>Discounts</span>
-              <span>{currencyFormatter.format(totals.discountTotal)}</span>
-            </div>
-            <div>
-              <span>Taxable amount</span>
-              <span>{currencyFormatter.format(totals.taxableAmount)}</span>
-            </div>
-            <div>
-              <span>Tax @ {formState.taxRate.toFixed(2)}%</span>
+            {totals.lineDiscounts > 0 && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: 'var(--rose-600)', fontWeight: 600 }}>
+                <span>Discounts Applied</span>
+                <span>-{currencyFormatter.format(totals.lineDiscounts)}</span>
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
+              <span style={{ fontWeight: 600 }}>{formState.taxConfig.type} ({formState.taxConfig.rate}%)</span>
               <span>{currencyFormatter.format(totals.taxAmount)}</span>
             </div>
-            <div className="grand-total">
-              <span>Total due</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '4px double var(--slate-900)', fontSize: '1.5rem', fontWeight: 900 }}>
+              <span>Total</span>
               <span>{currencyFormatter.format(totals.total)}</span>
             </div>
           </div>
 
-          <div className="gateway-block">
-            <h4>Payment processing</h4>
-            <p>
-              Online collections managed through <strong>{PAYMENT_GATEWAY.providerName}</strong>. Current status:{' '}
-              <span className={`gateway-tag ${PAYMENT_GATEWAY.status.toLowerCase()}`}>{PAYMENT_GATEWAY.status}</span>
-            </p>
-            <p className="payment-method-line">
-              Accepted methods:{' '}
-              <strong>{acceptedChannelSummary || 'Bank transfer'}</strong>
-            </p>
-            <div className="gateway-details">
-              <div>
-                <span className="label">Primary channel</span>
-                <strong>{preferredGatewayChannel?.label ?? '—'}</strong>
-                {preferredGatewayChannel ? (
-                  <small>
-                    SLA {preferredGatewayChannel.slaMinutes} min • Success{' '}
-                    {preferredGatewayChannel.successRate.toFixed(1)}%
-                  </small>
-                ) : null}
-              </div>
-              <div>
-                <span className="label">Merchant ID</span>
-                <strong>{PAYMENT_GATEWAY.credentials.merchantId}</strong>
-                <small>Webhook: {PAYMENT_GATEWAY.credentials.webhookUrl}</small>
-              </div>
-            </div>
-            <div className="gateway-channel-list">
-              {gatewayChannels.map((channel) => (
-                <span key={channel.id} className={`gateway-chip ${channel.status.toLowerCase()}`}>
-                  {channel.label} • {channel.successRate.toFixed(1)}%
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="terms-block">
-            <h4>Payment Instructions</h4>
+          <div style={{ marginTop: 'auto', paddingTop: '4rem', fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
+            <p style={{ fontWeight: 800, color: 'var(--slate-900)', textTransform: 'uppercase', marginBottom: '0.5rem', fontSize: '0.7rem' }}>Terms & Execution</p>
             <p>{formState.terms}</p>
-            <div className="banking">
-              <p>
-                Beneficiary: <strong>{ORGANIZATION.bank.beneficiary}</strong>
-              </p>
-              <p>
-                Bank: {ORGANIZATION.bank.bankName} • A/C No: {ORGANIZATION.bank.accountNumber}
-              </p>
-              <p>
-                IFSC: {ORGANIZATION.bank.ifsc} • SWIFT: {ORGANIZATION.bank.swift}
-              </p>
+            <div style={{ marginTop: '2rem', display: 'flex', gap: '3rem' }}>
+              <div>
+                <div style={{ width: '150px', borderBottom: '1px solid var(--slate-300)', marginBottom: '0.4rem' }}></div>
+                <span>Authorized Approver</span>
+              </div>
+              <div>
+                <div style={{ width: '150px', borderBottom: '1px solid var(--slate-300)', marginBottom: '0.4rem' }}></div>
+                <span>Customer Acceptance</span>
+              </div>
             </div>
-            <p className="footer-note">Thank you for partnering with {ORGANIZATION.displayName}.</p>
           </div>
-        </section>
-      </main>
+        </div>
+      </section>
     </div>
   )
 }

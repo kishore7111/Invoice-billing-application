@@ -1,4 +1,29 @@
-export type ServiceCategory = 'Digital Marketing' | 'Web Development' | 'Software Development'
+export type ServiceCategory = 'Digital Marketing' | 'Web Development' | 'Software Development' | 'Consulting'
+
+export type Currency = 'INR' | 'USD' | 'EUR' | 'GBP'
+
+export type RecurringInterval = 'weekly' | 'monthly' | 'quarterly' | 'yearly'
+
+export interface RecurringConfig {
+  isEnabled: boolean
+  interval: RecurringInterval
+  endDate?: string
+}
+
+export type TaxType = 'GST' | 'VAT' | 'Sales Tax' | 'None'
+
+export interface TaxConfig {
+  type: TaxType
+  rate: number
+  isInclusive: boolean
+}
+
+export type DiscountType = 'Percentage' | 'Fixed'
+
+export interface DiscountConfig {
+  type: DiscountType
+  value: number
+}
 
 export interface Service {
   id: string
@@ -32,7 +57,8 @@ export interface LineItem {
   description: string
   quantity: number
   unitPrice: number
-  discountRate: number
+  discount: DiscountConfig
+  taxOverride?: TaxConfig
   notes?: string
 }
 
@@ -48,15 +74,17 @@ export interface InvoiceMeta {
 export interface InvoiceFormState {
   clientSelectionId: string
   client: ClientDetails
-  currency: 'INR' | 'USD' | 'EUR'
-  taxRate: number
+  currency: Currency
+  taxConfig: TaxConfig
+  discount: DiscountConfig
   lineItems: LineItem[]
   meta: InvoiceMeta
+  recurring: RecurringConfig
   terms: string
   additionalNote: string
 }
 
-export type InvoiceStatus = 'Draft' | 'Pending' | 'Paid' | 'Overdue'
+export type InvoiceStatus = 'Draft' | 'Pending' | 'Awaiting Approval' | 'Approved' | 'Sent' | 'Paid' | 'Overdue' | 'Void'
 
 export interface InvoiceRecord {
   id: string
