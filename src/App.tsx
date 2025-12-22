@@ -3,25 +3,39 @@ import './App.css'
 import {
   ACTIVITY_LOG,
   CLIENT_DIRECTORY,
-  INVOICE_LEDGER,
+  INVOICE_WORKFLOW_LEDGER,
   ORGANIZATION,
   PAYMENT_GATEWAY,
   PAYMENT_TRANSACTIONS,
   SERVICE_CATALOG,
   SERVICE_SHOWCASES,
   TEAM_MEMBERS,
+  SEED_NOTIFICATIONS,
 } from './data'
 import type {
   ActivityLog,
   InvoiceRecord,
+  InvoiceWorkflowRecord,
   InvoiceStatus,
+  NotificationMessage,
   PaymentGatewayChannel,
   PaymentTransaction,
+  UserRole,
+  ApprovalStatus,
   ServiceShowcase,
 } from './types'
 import { InvoiceBuilder } from './components/InvoiceBuilder'
 
-type AppView = 'overview' | 'invoices' | 'builder' | 'clients' | 'team' | 'settings' | 'payments'
+type AppView =
+  | 'login'
+  | 'overview'
+  | 'invoices'
+  | 'builder'
+  | 'clients'
+  | 'team'
+  | 'settings'
+  | 'payments'
+  | 'notifications'
 
 const statusTone: Record<InvoiceStatus, string> = {
   Draft: 'draft',
@@ -54,20 +68,31 @@ const summarize = (records: InvoiceRecord[]) => {
 }
 
 function App() {
-  const [activeView, setActiveView] = useState<AppView>('overview')
+  const [activeView, setActiveView] = useState<AppView>('login')
+  const [role, setRole] = useState<UserRole | null>(null)
+  const [displayName, setDisplayName] = useState<string>('')
+  const [workflowLedger, setWorkflowLedger] = useState<InvoiceWorkflowRecord[]>(INVOICE_WORKFLOW_LEDGER)
+  const [notifications, setNotifications] = useState<NotificationMessage[]>(SEED_NOTIFICATIONS)
+  const loginNames = useMemo(
+    () => ({
+      ceo: 'Ananya Iyer',
+      employee: 'Priya Shah',
+    }),
+    [],
+  )
 
-  const overviewStats = useMemo(() => summarize(INVOICE_LEDGER), [])
+  const overviewStats = useMemo(() => summarize(workflowLedger), [workflowLedger])
   const recentInvoices = useMemo(
     () =>
-      [...INVOICE_LEDGER]
+      [...workflowLedger]
         .sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime())
         .slice(0, 5),
-    [],
+    [workflowLedger],
   )
 
   const filteredInvoices = useMemo(() => {
     if (activeView === 'invoices') {
-      return INVOICE_LEDGER
+      return workflowLedger
     }
     if (activeView === 'overview') {
       return recentInvoices
@@ -75,8 +100,84 @@ function App() {
     if (activeView === 'builder') {
       return []
     }
-    return INVOICE_LEDGER
-  }, [activeView, recentInvoices])
+    return workflowLedger
+  }, [activeView, recentInvoices, workflowLedger])
+
+  const pushNotification = (
+    recipientRole: UserRole,
+    message: string,
+    relatedInvoiceId?: string,
+    actionRequired = false,
+  ) => {
+    const entry: NotificationMessage = {
+      id: `note-${Date.now()}`,
+      recipientRole,
+      message,
+      timestamp: new Date().toISOString(),
+      relatedInvoiceId,
+      status: 'unread',
+      actionRequired,
+    }
+    setNotifications((prev) => [entry, ...prev])
+  }
+
+  const handleApprovalUpdate = (invoiceId: string, nextStatus: ApprovalStatus) => {
+    const match = workflowLedger.find((inv) => inv.id === invoiceId)
+    setWorkflowLedger((prev) =>
+      prev.map((inv) => (inv.id === invoiceId ? { ...inv, approvalStatus: nextStatus } : inv)),
+    )
+    if (match) {
+      const actionCopy =
+        nextStatus === 'Approved'
+          ? 'approved and ready to share with client.'
+          : nextStatus === 'Rejected'
+            ? 'rejected. Please review and resubmit.'
+            : 'needs edits before approval.'
+      pushNotification(
+        'employee',
+        `Invoice ${match.invoiceNumber} ${actionCopy}`,
+        invoiceId,
+        nextStatus !== 'Approved',
+      )
+    }
+  }
+
+  const handleLogin = (selectedRole: UserRole) => {
+    setRole(selectedRole)
+    setDisplayName(loginNames[selectedRole])
+    setActiveView('overview')
+  }
+
+  const handleLogout = () => {
+    setRole(null)
+    setDisplayName('')
+    setActiveView('login')
+  }
+
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => n.recipientRole === role && n.status === 'unread').length,
+    [notifications, role],
+  )
+
+  const renderLogin = () => (
+    <div className="login-screen">
+      <div className="login-card">
+        <h1>Billing Desk Access</h1>
+        <p>Select your role to continue.</p>
+        <div className="login-options">
+          <button type="button" className="primary" onClick={() => handleLogin('ceo')}>
+            Continue as CEO / Admin ({loginNames.ceo})
+          </button>
+          <button type="button" className="outline" onClick={() => handleLogin('employee')}>
+            Continue as Employee ({loginNames.employee})
+          </button>
+        </div>
+        <p className="muted small">
+          CEOs see all invoices, approvals, and notifications. Employees can draft invoices and view approval feedback.
+        </p>
+      </div>
+    </div>
+  )
 
   const paymentInsights = useMemo(() => {
     const totalVolume = PAYMENT_TRANSACTIONS.filter((txn) => txn.status === 'Succeeded').reduce(
@@ -118,6 +219,44 @@ function App() {
 
   const renderContent = () => {
     switch (activeView) {
+      case 'notifications':
+        return (
+          <section className="module-card">
+            <header className="module-heading">
+              <div>
+                <h2>Notifications</h2>
+                <p>Approval requests and status updates.</p>
+              </div>
+            </header>
+            <div className="notification-list">
+              {notifications
+                .filter((note) => note.recipientRole === role)
+                .map((note) => (
+                  <article key={note.id} className={`notification-card ${note.status}`}>
+                    <header>
+                      <span>{new Date(note.timestamp).toLocaleString('en-IN')}</span>
+                      {note.actionRequired ? <span className="chip warning">Action needed</span> : null}
+                    </header>
+                    <p>{note.message}</p>
+                    {note.relatedInvoiceId ? <small>Invoice: {note.relatedInvoiceId.toUpperCase()}</small> : null}
+                    {note.status === 'unread' ? (
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() =>
+                          setNotifications((prev) =>
+                            prev.map((n) => (n.id === note.id ? { ...n, status: 'read' } : n)),
+                          )
+                        }
+                      >
+                        Mark as read
+                      </button>
+                    ) : null}
+                  </article>
+                ))}
+            </div>
+          </section>
+        )
       case 'builder':
         return <InvoiceBuilder />
       case 'invoices':
@@ -140,10 +279,13 @@ function App() {
                 <span>Issued</span>
                 <span>Due</span>
                 <span>Status</span>
+                <span>Approval</span>
+                <span>Actions</span>
                 <span>Amount</span>
               </div>
               {filteredInvoices.map((invoice) => {
                 const client = CLIENT_DIRECTORY.find((c) => c.id === invoice.clientId)
+                const canApprove = role === 'ceo' && invoice.createdBy === 'employee'
                 return (
                   <div key={invoice.id} className="table-row invoice">
                     <span>
@@ -155,6 +297,26 @@ function App() {
                     <span>{invoice.issueDate}</span>
                     <span>{invoice.dueDate}</span>
                     <span>{renderStatusChip(invoice.status)}</span>
+                    <span className={`approval-chip ${invoice.approvalStatus.toLowerCase()}`}>
+                      {invoice.approvalStatus.replace(/([A-Z])/g, ' $1')}
+                    </span>
+                    <span className="actions-cell">
+                      {canApprove ? (
+                        <div className="action-stack">
+                          <button type="button" className="ghost" onClick={() => handleApprovalUpdate(invoice.id, 'Approved')}>
+                            Approve
+                          </button>
+                          <button type="button" className="ghost" onClick={() => handleApprovalUpdate(invoice.id, 'NeedsEdits')}>
+                            Request edits
+                          </button>
+                          <button type="button" className="ghost danger" onClick={() => handleApprovalUpdate(invoice.id, 'Rejected')}>
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </span>
                     <span>
                       {new Intl.NumberFormat('en-IN', {
                         style: 'currency',
@@ -614,6 +776,10 @@ function App() {
     }
   }
 
+  if (!role) {
+    return renderLogin()
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -678,6 +844,13 @@ function App() {
           >
             Payment console
           </button>
+          <button
+            type="button"
+            className={activeView === 'notifications' ? 'active' : ''}
+            onClick={() => setActiveView('notifications')}
+          >
+            Notifications {unreadCount ? <span className="badge">{unreadCount}</span> : null}
+          </button>
         </nav>
         <footer className="sidebar-footer">
           <p>{ORGANIZATION.contact.email}</p>
@@ -688,12 +861,17 @@ function App() {
       <div className="app-main">
         <header className="app-header">
           <div>
-            <p className="muted">Welcome back, Finance Team</p>
+            <p className="muted">Welcome back, {displayName || 'Finance Team'}</p>
             <h1>{activeView === 'builder' ? 'Generate invoice' : 'Invoice & Billing Command Centre'}</h1>
           </div>
-          <button type="button" className="outline" onClick={() => setActiveView('builder')}>
-            + New invoice
-          </button>
+          <div className="header-actions">
+            <button type="button" className="outline" onClick={() => setActiveView('builder')}>
+              + New invoice
+            </button>
+            <button type="button" className="ghost" onClick={handleLogout}>
+              Log out
+            </button>
+          </div>
         </header>
         <div className="content-area">{renderContent()}</div>
       </div>
