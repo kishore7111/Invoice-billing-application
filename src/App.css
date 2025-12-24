@@ -467,6 +467,329 @@ button.small {
   font-size: 0.8rem;
 }
 
+/* Visual Dashboard Styles */
+.visual-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
+  margin-bottom: 2rem;
+  padding: 2rem;
+  background: linear-gradient(135deg, rgba(35, 62, 120, 0.05) 0%, rgba(35, 62, 120, 0.02) 100%);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(35, 62, 120, 0.1);
+}
+
+.dashboard-title h1 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--ink-800);
+  margin: 0 0 0.5rem 0;
+  background: linear-gradient(135deg, var(--accent-600) 0%, var(--accent-500) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.dashboard-title p {
+  color: var(--ink-500);
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.dashboard-stats {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+}
+
+.stat-circle {
+  position: relative;
+}
+
+.circle-progress {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: transform 0.3s ease;
+}
+
+.circle-progress:hover {
+  transform: scale(1.05);
+}
+
+.circle-inner {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.circle-inner strong {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--ink-800);
+  line-height: 1;
+}
+
+.circle-inner span {
+  font-size: 0.75rem;
+  color: var(--ink-500);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 0.25rem;
+}
+
+.revenue-card {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  border-radius: var(--radius-md);
+  color: white;
+  box-shadow: 0 8px 30px rgba(16, 185, 129, 0.3);
+  transition: transform 0.3s ease;
+}
+
+.revenue-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(16, 185, 129, 0.4);
+}
+
+.revenue-icon {
+  font-size: 3rem;
+  opacity: 0.9;
+}
+
+.revenue-details strong {
+  display: block;
+  font-size: 1.8rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.revenue-details span {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  gap: 2rem;
+}
+
+.dashboard-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-200);
+  border-radius: var(--radius-md);
+  padding: 1.75rem;
+  box-shadow: var(--shadow-card);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+}
+
+.dashboard-card header h2 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--ink-800);
+  margin: 0 0 0.5rem 0;
+}
+
+.dashboard-card header p {
+  color: var(--ink-500);
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.chart-container {
+  margin-top: 1rem;
+}
+
+.bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.bar-item {
+  display: grid;
+  grid-template-columns: 150px 1fr 60px;
+  align-items: center;
+  gap: 1rem;
+}
+
+.bar-label {
+  font-size: 0.85rem;
+  color: var(--ink-600);
+  text-transform: capitalize;
+}
+
+.bar-wrapper {
+  height: 24px;
+  background: var(--border-200);
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 12px;
+  transition: width 0.8s ease-out;
+  animation: growWidth 1s ease-out;
+}
+
+@keyframes growWidth {
+  from { width: 0; }
+  to { width: var(--final-width); }
+}
+
+.bar-value {
+  font-weight: 600;
+  color: var(--ink-700);
+  text-align: right;
+}
+
+.activity-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.timeline-item {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.timeline-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-top: 0.25rem;
+  animation: pulse 2s infinite;
+}
+
+.timeline-dot.awaitingapproval {
+  background: #f59e0b;
+}
+
+.timeline-dot.approved {
+  background: #10b981;
+}
+
+.timeline-dot.rejected {
+  background: #ef4444;
+}
+
+.timeline-dot.needsedits {
+  background: #8b5cf6;
+}
+
+.timeline-content {
+  background: var(--surface-card);
+  border: 1px solid var(--border-200);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  flex: 1;
+}
+
+.timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.timeline-header strong {
+  color: var(--ink-800);
+  font-weight: 600;
+}
+
+.timeline-time {
+  font-size: 0.8rem;
+  color: var(--ink-400);
+}
+
+.timeline-client {
+  color: var(--ink-600);
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+}
+
+.timeline-amount {
+  font-weight: 700;
+  color: var(--accent-600);
+  font-size: 1.1rem;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.metric-item {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, rgba(35, 62, 120, 0.05) 0%, rgba(35, 62, 120, 0.02) 100%);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(35, 62, 120, 0.1);
+  transition: transform 0.3s ease;
+}
+
+.metric-item:hover {
+  transform: translateY(-2px);
+}
+
+.metric-icon {
+  font-size: 2rem;
+  opacity: 0.7;
+}
+
+.metric-details strong {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--ink-800);
+  line-height: 1;
+}
+
+.metric-details span {
+  font-size: 0.8rem;
+  color: var(--ink-500);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
 .app-main {
   display: flex;
   flex-direction: column;

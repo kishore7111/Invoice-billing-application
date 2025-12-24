@@ -29,6 +29,7 @@ import { InvoiceBuilder } from './components/InvoiceBuilder'
 type AppView =
   | 'login'
   | 'overview'
+  | 'dashboard'
   | 'invoices'
   | 'builder'
   | 'clients'
@@ -268,7 +269,179 @@ function App() {
     <span className={`status-chip ${statusTone[status]}`}>{status}</span>
   )
 
-  const renderNotifications = () => {
+  const renderDashboard = () => {
+    const recentInvoices = useMemo(
+      () =>
+        [...workflowLedger]
+          .sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime())
+          .slice(0, 6),
+      [workflowLedger],
+    )
+
+    const pendingInvoices = useMemo(() => 
+      workflowLedger.filter(inv => inv.approvalStatus === 'AwaitingApproval'), 
+      [workflowLedger]
+    )
+
+    const approvedInvoices = useMemo(() => 
+      workflowLedger.filter(inv => inv.approvalStatus === 'Approved'), 
+      [workflowLedger]
+    )
+
+    const totalRevenue = useMemo(() => 
+      approvedInvoices.reduce((sum, inv) => sum + inv.amount, 0), 
+      [approvedInvoices]
+    )
+
+    return (
+      <div className="visual-dashboard">
+        <div className="dashboard-header">
+          <div className="dashboard-title">
+            <h1>Visual Dashboard</h1>
+            <p>Real-time insights and analytics for your billing operations</p>
+          </div>
+          <div className="dashboard-stats">
+            <div className="stat-circle">
+              <div className="circle-progress" style={{ 
+                background: `conic-gradient(#10b981 0deg ${(approvedInvoices.length / workflowLedger.length) * 360}deg, #e5e7eb 0deg)` 
+              }}>
+                <div className="circle-inner">
+                  <strong>{approvedInvoices.length}</strong>
+                  <span>Approved</span>
+                </div>
+              </div>
+            </div>
+            <div className="stat-circle">
+              <div className="circle-progress" style={{ 
+                background: `conic-gradient(#f59e0b 0deg ${(pendingInvoices.length / workflowLedger.length) * 360}deg, #e5e7eb 0deg)` 
+              }}>
+                <div className="circle-inner">
+                  <strong>{pendingInvoices.length}</strong>
+                  <span>Pending</span>
+                </div>
+              </div>
+            </div>
+            <div className="revenue-card">
+              <div className="revenue-icon">💰</div>
+              <div className="revenue-details">
+                <strong>
+                  {new Intl.NumberFormat('en-IN', {
+                    style: 'currency',
+                    currency: 'INR',
+                    maximumFractionDigits: 0,
+                  }).format(totalRevenue)}
+                </strong>
+                <span>Total Revenue</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="dashboard-grid">
+          <section className="dashboard-card chart-card">
+            <header>
+              <h2>Invoice Status Overview</h2>
+              <p>Distribution of invoice statuses</p>
+            </header>
+            <div className="chart-container">
+              <div className="bar-chart">
+                {['AwaitingApproval', 'Approved', 'Rejected', 'NeedsEdits'].map((status) => {
+                  const count = workflowLedger.filter(inv => inv.approvalStatus === status).length
+                  const percentage = (count / workflowLedger.length) * 100
+                  return (
+                    <div key={status} className="bar-item">
+                      <div className="bar-label">{status.replace(/([A-Z])/g, ' $1').trim()}</div>
+                      <div className="bar-wrapper">
+                        <div className="bar-fill" style={{ 
+                          width: `${percentage}%`,
+                          background: status === 'Approved' ? '#10b981' : 
+                                     status === 'AwaitingApproval' ? '#f59e0b' :
+                                     status === 'Rejected' ? '#ef4444' : '#8b5cf6'
+                        }}></div>
+                      </div>
+                      <span className="bar-value">{count}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </section>
+
+          <section className="dashboard-card recent-activity">
+            <header>
+              <h2>Recent Activity</h2>
+              <p>Latest invoice updates and actions</p>
+            </header>
+            <div className="activity-timeline">
+              {recentInvoices.slice(0, 4).map((invoice) => (
+                <div key={invoice.id} className="timeline-item">
+                  <div className={`timeline-dot ${invoice.approvalStatus.toLowerCase()}`}></div>
+                  <div className="timeline-content">
+                    <div className="timeline-header">
+                      <strong>{invoice.invoiceNumber}</strong>
+                      <span className="timeline-time">
+                        {new Intl.DateTimeFormat('en-IN', { 
+                          dateStyle: 'short', 
+                          timeStyle: 'short' 
+                        }).format(new Date(invoice.lastUpdated))}
+                      </span>
+                    </div>
+                    <p className="timeline-client">{invoice.engagement}</p>
+                    <div className="timeline-amount">
+                      {new Intl.NumberFormat('en-IN', {
+                        style: 'currency',
+                        currency: invoice.currency,
+                        maximumFractionDigits: 0,
+                      }).format(invoice.amount)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="dashboard-card metrics-card">
+            <header>
+              <h2>Key Metrics</h2>
+              <p>Performance indicators</p>
+            </header>
+            <div className="metrics-grid">
+              <div className="metric-item">
+                <div className="metric-icon">📈</div>
+                <div className="metric-details">
+                  <strong>{workflowLedger.length}</strong>
+                  <span>Total Invoices</span>
+                </div>
+              </div>
+              <div className="metric-item">
+                <div className="metric-icon">⚡</div>
+                <div className="metric-details">
+                  <strong>{Math.round((approvedInvoices.length / workflowLedger.length) * 100)}%</strong>
+                  <span>Approval Rate</span>
+                </div>
+              </div>
+              <div className="metric-item">
+                <div className="metric-icon">⏱️</div>
+                <div className="metric-details">
+                  <strong>
+                    {workflowLedger.length > 0 
+                      ? Math.round(workflowLedger.reduce((sum, inv) => {
+                          const days = Math.ceil((new Date().getTime() - new Date(inv.issueDate).getTime()) / (1000 * 60 * 60 * 24))
+                          return sum + days
+                        }, 0) / workflowLedger.length)
+                      : 0
+                    } days
+                  </strong>
+                  <span>Avg Processing Time</span>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    )
+  }
+    const renderNotifications = () => {
     const roleNotifications = notifications.filter((note) => note.recipientRole === role)
     const unreadNotifications = roleNotifications.filter((note) => note.status === 'unread')
     
@@ -361,8 +534,8 @@ function App() {
 
   const renderContent = () => {
     switch (activeView) {
-      case 'notifications':
-        return renderNotifications()
+      case 'dashboard':
+        return renderDashboard()
       case 'proposal-detail':
         return (
           <section className="module-card">
@@ -400,6 +573,8 @@ function App() {
             )}
           </section>
         )
+      case 'notifications':
+        return renderNotifications()
       case 'builder':
         return <InvoiceBuilder editingInvoice={editingInvoice} onSave={handleInvoiceSave} />
       case 'invoices':
@@ -952,6 +1127,14 @@ function App() {
         </div>
         <nav className="nav-group">
           <p className="nav-label">Overview</p>
+          <button
+            type="button"
+            className={activeView === 'dashboard' ? 'active' : ''}
+            onClick={() => setActiveView('dashboard')}
+          >
+            <span className="nav-icon">📈</span>
+            Visual Dashboard
+          </button>
           <button
             type="button"
             className={activeView === 'overview' ? 'active' : ''}
