@@ -530,6 +530,78 @@ button.small {
   font-size: 0.95rem;
 }
 
+.stat-card {
+  background: var(--surface-card);
+  border: 1px solid var(--border-200);
+  border-radius: var(--radius-md);
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--accent-500) 0%, var(--accent-600) 100%);
+  animation: slideIn 0.8s ease-out;
+}
+
+.stat-card.primary::before {
+  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+}
+
+.stat-card.warning::before {
+  background: linear-gradient(90deg, #f59e0b 0%, #d97706 100%);
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.stat-card strong {
+  display: block;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--ink-800);
+  margin: 0.5rem 0 0.25rem 0;
+  position: relative;
+  z-index: 1;
+}
+
+.stat-card.primary strong {
+  color: #059669;
+}
+
+.stat-card.warning strong {
+  color: #d97706;
+}
+
+.stat-card .label {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-400);
+  margin-bottom: 0.5rem;
+}
+
+.stat-card p {
+  font-size: 0.9rem;
+  color: var(--ink-500);
+  margin: 0.25rem 0 0 0;
+  line-height: 1.4;
+}
+
 .stat-grid {
   display: grid;
   gap: 1.4rem;
@@ -981,10 +1053,6 @@ button.ghost:hover {
   display: grid;
   gap: 2rem;
   align-items: start;
-}
-
-.invoice-builder .workspace.layout-split {
-  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
 }
 
 .invoice-builder .workspace.layout-form,

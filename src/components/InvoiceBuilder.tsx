@@ -150,7 +150,7 @@ export const InvoiceBuilder = ({
   onSave?: (invoiceData: InvoiceFormState) => void 
 }) => {
   const [formState, setFormState] = useState<InvoiceFormState>(() => createInitialState(editingInvoice || undefined))
-  const [layoutMode, setLayoutMode] = useState<'split' | 'form' | 'preview'>('form')
+  const [layoutMode, setLayoutMode] = useState<'form' | 'preview'>('form')
   const [savedInvoices, setSavedInvoices] = useState<StoredInvoice[]>(() => {
     const stored = safeJsonParse<StoredInvoice[]>(
       typeof window === 'undefined' ? null : window.localStorage.getItem(INVOICE_ARCHIVE_STORAGE_KEY),
@@ -170,29 +170,9 @@ export const InvoiceBuilder = ({
   const acceptedChannelSummary = useMemo(() => gatewayChannels.map((channel) => channel.label).join(' • '), [gatewayChannels])
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) {
-      setLayoutMode('split')
+    if (typeof window === 'undefined') {
       return
     }
-
-    const mediaQuery = window.matchMedia('(min-width: 1280px)')
-
-    const applyLayout = (matches: boolean) => {
-      if (hasUserSelectedLayout.current) {
-        return
-      }
-      setLayoutMode(matches ? 'split' : 'form')
-    }
-
-    applyLayout(mediaQuery.matches)
-
-    const listener = (event: MediaQueryListEvent) => {
-      applyLayout(event.matches)
-    }
-
-    mediaQuery.addEventListener('change', listener)
-
-    return () => mediaQuery.removeEventListener('change', listener)
   }, [])
 
   useEffect(() => {
@@ -572,7 +552,7 @@ export const InvoiceBuilder = ({
     setDraftPayload(null)
   }
 
-  const handleLayoutModeChange = (mode: 'split' | 'form' | 'preview') => {
+  const handleLayoutModeChange = (mode: 'form' | 'preview') => {
     hasUserSelectedLayout.current = true
     setLayoutMode(mode)
     if (mode === 'preview') {
@@ -675,21 +655,14 @@ export const InvoiceBuilder = ({
             className={layoutMode === 'form' ? 'active' : ''}
             onClick={() => handleLayoutModeChange('form')}
           >
-            Form only
-          </button>
-          <button
-            type="button"
-            className={layoutMode === 'split' ? 'active' : ''}
-            onClick={() => handleLayoutModeChange('split')}
-          >
-            Split view
+            Form view
           </button>
           <button
             type="button"
             className={layoutMode === 'preview' ? 'active' : ''}
             onClick={() => handleLayoutModeChange('preview')}
           >
-            Preview only
+            Preview
           </button>
         </div>
       </div>
