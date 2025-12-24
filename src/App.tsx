@@ -139,6 +139,14 @@ function App() {
         invoiceId,
         nextStatus !== 'Approved',
       )
+      if (nextStatus === 'Approved') {
+        pushNotification(
+          'ceo',
+          `Invoice ${match.invoiceNumber} approved. Client view link ready.`,
+          invoiceId,
+          false,
+        )
+      }
     }
   }
 
