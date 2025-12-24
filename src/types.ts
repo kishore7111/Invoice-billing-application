@@ -54,6 +54,8 @@ export interface InvoiceFormState {
   meta: InvoiceMeta
   terms: string
   additionalNote: string
+  notes?: string
+  status?: InvoiceStatus
 }
 
 export type InvoiceStatus = 'Draft' | 'Pending' | 'Paid' | 'Overdue'
@@ -79,6 +81,8 @@ export interface InvoiceWorkflowRecord extends InvoiceRecord {
   approvalStatus: ApprovalStatus
   createdBy: 'employee' | 'ceo'
   clientViewUrl?: string
+  lineItems?: LineItem[]
+  notes?: string
 }
 
 export interface NotificationMessage {

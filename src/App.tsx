@@ -23,6 +23,7 @@ import type {
   UserRole,
   ApprovalStatus,
   ServiceShowcase,
+  InvoiceFormState,
 } from './types'
 import { InvoiceBuilder } from './components/InvoiceBuilder'
 
@@ -36,6 +37,7 @@ type AppView =
   | 'settings'
   | 'payments'
   | 'notifications'
+  | 'proposal-detail'
 
 const statusTone: Record<InvoiceStatus, string> = {
   Draft: 'draft',
@@ -73,6 +75,8 @@ function App() {
   const [displayName, setDisplayName] = useState<string>('')
   const [workflowLedger, setWorkflowLedger] = useState<InvoiceWorkflowRecord[]>(INVOICE_WORKFLOW_LEDGER)
   const [notifications, setNotifications] = useState<NotificationMessage[]>(SEED_NOTIFICATIONS)
+  const [selectedProposal, setSelectedProposal] = useState<ServiceShowcase | null>(null)
+  const [editingInvoice, setEditingInvoice] = useState<InvoiceWorkflowRecord | null>(null)
   const loginNames = useMemo(
     () => ({
       ceo: 'Ananya Iyer',
@@ -147,7 +151,51 @@ function App() {
           false,
         )
       }
+      if (nextStatus === 'NeedsEdits') {
+        setEditingInvoice(match)
+        setActiveView('builder')
+      }
     }
+  }
+
+  const handleCreateInvoice = () => {
+    setEditingInvoice(null)
+    setActiveView('builder')
+  }
+
+  const handleInvoiceSave = (invoiceData: InvoiceFormState) => {
+    const newInvoice: InvoiceWorkflowRecord = {
+      id: `inv-${Date.now()}`,
+      invoiceNumber: invoiceData.meta.invoiceNumber,
+      clientId: invoiceData.clientSelectionId,
+      engagement: invoiceData.meta.projectName,
+      currency: invoiceData.currency,
+      amount: invoiceData.lineItems.reduce((sum: number, item: any) => sum + item.quantity * item.unitPrice, 0),
+      status: invoiceData.status || 'Pending',
+      issueDate: invoiceData.meta.issueDate,
+      dueDate: invoiceData.meta.dueDate,
+      lastUpdated: new Date().toISOString(),
+      createdBy: role || 'employee',
+      approvalStatus: 'AwaitingApproval',
+      lineItems: invoiceData.lineItems,
+      notes: invoiceData.notes,
+    }
+    
+    setWorkflowLedger(prev => [...prev, newInvoice])
+    
+    pushNotification(
+      'ceo',
+      `New invoice ${newInvoice.invoiceNumber} created by ${role === 'ceo' ? 'CEO' : 'employee'} and requires approval.`,
+      newInvoice.id,
+      true
+    )
+    
+    setActiveView('invoices')
+  }
+
+  const handleViewProposal = (proposal: ServiceShowcase) => {
+    setSelectedProposal(proposal)
+    setActiveView('proposal-detail')
   }
 
   const handleLogin = (selectedRole: UserRole) => {
@@ -278,8 +326,45 @@ function App() {
             </div>
           </section>
         )
+      case 'proposal-detail':
+        return (
+          <section className="module-card">
+            <header className="module-heading">
+              <div>
+                <h2>Service Proposal</h2>
+                <p>Detailed scope and deliverables for this program.</p>
+              </div>
+              <button type="button" className="outline" onClick={() => setActiveView('overview')}>
+                Back to overview
+              </button>
+            </header>
+            {selectedProposal && (
+              <article className="proposal-detail">
+                <header>
+                  <h3>{selectedProposal.headline}</h3>
+                  <span className="proposal-persona">{selectedProposal.persona}</span>
+                </header>
+                <p className="proposal-summary">{selectedProposal.summary}</p>
+                <div className="proposal-deliverables">
+                  <h4>Key Deliverables</h4>
+                  <ul>
+                    {selectedProposal.deliverables.map((deliverable) => (
+                      <li key={deliverable}>{deliverable}</li>
+                    ))}
+                  </ul>
+                </div>
+                <footer className="proposal-footer">
+                  <span className="proposal-timeline">{selectedProposal.projectedTimeline}</span>
+                  <button type="button" className="primary" onClick={handleCreateInvoice}>
+                    Create invoice from this proposal
+                  </button>
+                </footer>
+              </article>
+            )}
+          </section>
+        )
       case 'builder':
-        return <InvoiceBuilder />
+        return <InvoiceBuilder editingInvoice={editingInvoice} onSave={handleInvoiceSave} />
       case 'invoices':
         return (
           <section className="module-card">
@@ -288,7 +373,7 @@ function App() {
                 <h2>All invoices</h2>
                 <p>Monitor billing progress across engagements and status buckets.</p>
               </div>
-              <button type="button" className="primary" onClick={() => setActiveView('builder')}>
+              <button type="button" className="primary" onClick={handleCreateInvoice}>
                 Create invoice
               </button>
             </header>
@@ -727,7 +812,7 @@ function App() {
                     </ul>
                     <footer>
                       <span>{item.projectedTimeline}</span>
-                      <button type="button" className="outline">
+                      <button type="button" className="outline" onClick={() => handleViewProposal(item)}>
                         View proposal
                       </button>
                     </footer>

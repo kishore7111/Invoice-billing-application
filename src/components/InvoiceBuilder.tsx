@@ -5,6 +5,7 @@ import type {
   ClientDetails,
   ClientProfile,
   InvoiceFormState,
+  InvoiceWorkflowRecord,
   LineItem,
   Service,
   StoredInvoice,
@@ -88,9 +89,33 @@ const createLineItem = (service?: Service): LineItem => ({
   notes: '',
 })
 
-const createInitialState = (): InvoiceFormState => {
+const createInitialState = (editingInvoice?: InvoiceWorkflowRecord): InvoiceFormState => {
   const today = new Date()
   const defaultClient = CLIENT_DIRECTORY[0]
+
+  if (editingInvoice) {
+    const client = CLIENT_DIRECTORY.find((c) => c.id === editingInvoice.clientId)
+    return {
+      clientSelectionId: editingInvoice.clientId,
+      client: client ? toClientDetails(client) : { ...emptyClientDetails },
+      currency: editingInvoice.currency,
+      taxRate: 18,
+      lineItems: editingInvoice?.lineItems?.map((item: any) => ({ ...item, id: generateId() })) || [],
+      meta: {
+        invoiceNumber: `${editingInvoice.invoiceNumber}-EDIT-${generateId()}`,
+        issueDate: editingInvoice.issueDate,
+        dueDate: editingInvoice.dueDate,
+        projectName: editingInvoice.engagement,
+        purchaseOrder: '',
+        reference: '',
+      },
+      terms: 'Payment due within 15 days of invoice date. Late payments subject to 1.5% monthly interest.',
+      additionalNote: '',
+      notes: editingInvoice.notes || '',
+      status: 'Draft',
+    }
+  }
+
   return {
     clientSelectionId: defaultClient?.id ?? '',
     client: defaultClient ? toClientDetails(defaultClient) : { ...emptyClientDetails },
@@ -105,9 +130,10 @@ const createInitialState = (): InvoiceFormState => {
       purchaseOrder: '',
       reference: '',
     },
-    terms:
-      'Payment due within 15 days from the invoice date. Please remit via bank transfer to the account listed. Late payments accrue a 2% monthly finance charge.',
+    terms: 'Payment due within 15 days of invoice date. Late payments subject to 1.5% monthly interest.',
     additionalNote: '',
+    notes: '',
+    status: 'Draft',
   }
 }
 
@@ -116,8 +142,14 @@ const serviceLookup = SERVICE_CATALOG.reduce<Record<string, Service>>((acc, serv
   return acc
 }, {})
 
-export const InvoiceBuilder = () => {
-  const [formState, setFormState] = useState<InvoiceFormState>(() => createInitialState())
+export const InvoiceBuilder = ({ 
+  editingInvoice, 
+  onSave 
+}: { 
+  editingInvoice?: InvoiceWorkflowRecord | null
+  onSave?: (invoiceData: InvoiceFormState) => void 
+}) => {
+  const [formState, setFormState] = useState<InvoiceFormState>(() => createInitialState(editingInvoice || undefined))
   const [layoutMode, setLayoutMode] = useState<'split' | 'form' | 'preview'>('form')
   const [savedInvoices, setSavedInvoices] = useState<StoredInvoice[]>(() => {
     const stored = safeJsonParse<StoredInvoice[]>(
@@ -406,6 +438,10 @@ export const InvoiceBuilder = () => {
     }
     setSavedInvoices((prev) => [invoice, ...prev])
     setSelectedSavedInvoiceId(invoice.id)
+    
+    if (onSave) {
+      onSave(formState)
+    }
   }
 
   const handleUpdateSavedInvoiceCopy = () => {
