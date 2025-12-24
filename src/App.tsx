@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import {
   ACTIVITY_LOG,
@@ -70,7 +70,7 @@ const summarize = (records: InvoiceRecord[]) => {
 }
 
 function App() {
-  const [activeView, setActiveView] = useState<AppView>('login')
+  const [activeView, setActiveView] = useState<AppView>('dashboard')
   const [role, setRole] = useState<UserRole | null>(null)
   const [displayName, setDisplayName] = useState<string>('')
   const [workflowLedger, setWorkflowLedger] = useState<InvoiceWorkflowRecord[]>(INVOICE_WORKFLOW_LEDGER)
@@ -84,6 +84,14 @@ function App() {
     }),
     [],
   )
+
+  // Auto-login for development
+  useEffect(() => {
+    if (!role) {
+      setRole('ceo')
+      setDisplayName('Ananya Iyer')
+    }
+  }, [role])
 
   const overviewStats = useMemo(() => summarize(workflowLedger), [workflowLedger])
   const recentInvoices = useMemo(
