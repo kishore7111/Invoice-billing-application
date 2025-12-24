@@ -13,7 +13,6 @@ import {
   SEED_NOTIFICATIONS,
 } from './data'
 import type {
-  ActivityLog,
   InvoiceRecord,
   InvoiceWorkflowRecord,
   InvoiceStatus,
@@ -269,63 +268,101 @@ function App() {
     <span className={`status-chip ${statusTone[status]}`}>{status}</span>
   )
 
-  const renderActivity = (activity: ActivityLog) => (
-    <div key={activity.id} className="activity-row">
-      <div>
-        <p className="activity-label">{activity.summary}</p>
-        <span className="activity-meta">
-          {new Intl.DateTimeFormat('en-IN', {
-            dateStyle: 'medium',
-            timeStyle: 'short',
-          }).format(new Date(activity.timestamp))}
-          {' • '}
-          {activity.actor}
-        </span>
-      </div>
-      <span className={`activity-type ${activity.activityType}`}>{activity.activityType}</span>
-    </div>
-  )
+  const renderNotifications = () => {
+    const roleNotifications = notifications.filter((note) => note.recipientRole === role)
+    const unreadNotifications = roleNotifications.filter((note) => note.status === 'unread')
+    
+    return (
+      <section className="module-card">
+        <header className="module-heading">
+          <div>
+            <h2>Notifications</h2>
+            <p>{unreadNotifications.length} unread messages</p>
+          </div>
+          {unreadNotifications.length > 0 && (
+            <button 
+              type="button" 
+              className="outline" 
+              onClick={() => {
+                setNotifications(prev => 
+                  prev.map(n => 
+                    n.recipientRole === role && n.status === 'unread' 
+                      ? { ...n, status: 'read' } 
+                      : n
+                  )
+                )
+              }}
+            >
+              Mark all as read
+            </button>
+          )}
+        </header>
+        <div className="notification-list enhanced">
+          {roleNotifications.length === 0 ? (
+            <div className="empty-state">
+              <span className="empty-icon">📭</span>
+              <p>No notifications</p>
+              <span className="empty-text">You're all caught up!</span>
+            </div>
+          ) : (
+            roleNotifications.map((note) => (
+              <article key={note.id} className={`notification-card enhanced ${note.status}`}>
+                <header>
+                  <div className="notification-meta">
+                    <span className="notification-time">
+                      {new Intl.DateTimeFormat('en-IN', {
+                        dateStyle: 'short',
+                        timeStyle: 'short',
+                      }).format(new Date(note.timestamp))}
+                    </span>
+                    {note.actionRequired && <span className="chip urgent">Action Required</span>}
+                    {note.status === 'unread' && <span className="chip new">New</span>}
+                  </div>
+                  {note.status === 'unread' && (
+                    <button
+                      type="button"
+                      className="ghost small"
+                      onClick={() =>
+                        setNotifications((prev) =>
+                          prev.map((n) => (n.id === note.id ? { ...n, status: 'read' } : n)),
+                        )
+                      }
+                    >
+                      Mark as read
+                    </button>
+                  )}
+                </header>
+                <div className="notification-content">
+                  <p>{note.message}</p>
+                  {note.relatedInvoiceId && (
+                    <div className="notification-actions">
+                      <button 
+                        type="button" 
+                        className="outline small"
+                        onClick={() => {
+                          setActiveView('invoices')
+                          setNotifications(prev => 
+                            prev.map(n => n.id === note.id ? { ...n, status: 'read' } : n)
+                          )
+                        }}
+                      >
+                        View Invoice
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </article>
+            ))
+          )}
+        </div>
+      </section>
+    )
+  }
 
   const renderContent = () => {
     switch (activeView) {
       case 'notifications':
-        return (
-          <section className="module-card">
-            <header className="module-heading">
-              <div>
-                <h2>Notifications</h2>
-                <p>Approval requests and status updates.</p>
-              </div>
-            </header>
-            <div className="notification-list">
-              {notifications
-                .filter((note) => note.recipientRole === role)
-                .map((note) => (
-                  <article key={note.id} className={`notification-card ${note.status}`}>
-                    <header>
-                      <span>{new Date(note.timestamp).toLocaleString('en-IN')}</span>
-                      {note.actionRequired ? <span className="chip warning">Action needed</span> : null}
-                    </header>
-                    <p>{note.message}</p>
-                    {note.relatedInvoiceId ? <small>Invoice: {note.relatedInvoiceId.toUpperCase()}</small> : null}
-                    {note.status === 'unread' ? (
-                      <button
-                        type="button"
-                        className="ghost"
-                        onClick={() =>
-                          setNotifications((prev) =>
-                            prev.map((n) => (n.id === note.id ? { ...n, status: 'read' } : n)),
-                          )
-                        }
-                      >
-                        Mark as read
-                      </button>
-                    ) : null}
-                  </article>
-                ))}
-            </div>
-          </section>
-        )
+        return renderNotifications()
       case 'proposal-detail':
         return (
           <section className="module-card">
@@ -757,7 +794,24 @@ function App() {
                   <p>Key actions from finance, delivery, and collections.</p>
                 </div>
               </header>
-              <div className="activity-feed">{ACTIVITY_LOG.map((activity) => renderActivity(activity))}</div>
+              <div className="activity-feed">
+                {ACTIVITY_LOG.map((activity) => (
+                  <div key={activity.id} className="activity-row">
+                    <div>
+                      <p className="activity-label">{activity.summary}</p>
+                      <span className="activity-meta">
+                        {new Intl.DateTimeFormat('en-IN', {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        }).format(new Date(activity.timestamp))}
+                        {' • '}
+                        {activity.actor}
+                      </span>
+                    </div>
+                    <span className={`activity-type ${activity.activityType}`}>{activity.activityType}</span>
+                  </div>
+                ))}
+              </div>
             </section>
 
             <section className="module-card span-2">
@@ -903,6 +957,7 @@ function App() {
             className={activeView === 'overview' ? 'active' : ''}
             onClick={() => setActiveView('overview')}
           >
+            <span className="nav-icon">📊</span>
             Executive summary
           </button>
           <button
@@ -910,6 +965,7 @@ function App() {
             className={activeView === 'invoices' ? 'active' : ''}
             onClick={() => setActiveView('invoices')}
           >
+            <span className="nav-icon">📄</span>
             Invoice ledger
           </button>
           <button
@@ -917,6 +973,7 @@ function App() {
             className={activeView === 'builder' ? 'active' : ''}
             onClick={() => setActiveView('builder')}
           >
+            <span className="nav-icon">➕</span>
             Create invoice
           </button>
         </nav>
@@ -927,6 +984,7 @@ function App() {
             className={activeView === 'clients' ? 'active' : ''}
             onClick={() => setActiveView('clients')}
           >
+            <span className="nav-icon">👥</span>
             Client profiles
           </button>
           <button
@@ -934,6 +992,7 @@ function App() {
             className={activeView === 'team' ? 'active' : ''}
             onClick={() => setActiveView('team')}
           >
+            <span className="nav-icon">👔</span>
             Team workload
           </button>
           <button
@@ -941,6 +1000,7 @@ function App() {
             className={activeView === 'settings' ? 'active' : ''}
             onClick={() => setActiveView('settings')}
           >
+            <span className="nav-icon">⚙️</span>
             Settings
           </button>
           <button
@@ -948,13 +1008,15 @@ function App() {
             className={activeView === 'payments' ? 'active' : ''}
             onClick={() => setActiveView('payments')}
           >
-            Payment console
+            <span className="nav-icon">💳</span>
+            Payment gateway
           </button>
           <button
             type="button"
             className={activeView === 'notifications' ? 'active' : ''}
             onClick={() => setActiveView('notifications')}
           >
+            <span className="nav-icon">🔔</span>
             Notifications {unreadCount ? <span className="badge">{unreadCount}</span> : null}
           </button>
         </nav>
