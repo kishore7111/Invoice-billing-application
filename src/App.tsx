@@ -162,14 +162,27 @@ function App() {
   const renderLogin = () => (
     <div className="login-screen">
       <div className="login-card">
-        <h1>Billing Desk Access</h1>
-        <p>Select your role to continue.</p>
+        <div className="brand" style={{ marginBottom: '2rem', justifyContent: 'center' }}>
+          <span className="glyph" style={{ width: '48px', height: '48px', fontSize: '1.6rem' }}>A</span>
+          <div style={{ textAlign: 'left' }}>
+            <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>Aurora Digital Solutions</p>
+            <strong style={{ fontSize: '1.1rem', color: 'var(--ink-800)' }}>Billing Desk</strong>
+          </div>
+        </div>
+        <h1>Sign In</h1>
+        <p>Select your role to continue to the billing portal</p>
         <div className="login-options">
           <button type="button" className="primary" onClick={() => handleLogin('ceo')}>
-            Continue as CEO / Admin ({loginNames.ceo})
+            Continue as CEO / Admin
+            <span className="muted" style={{ fontSize: '0.85rem', display: 'block', marginTop: '0.25rem' }}>
+              {loginNames.ceo}
+            </span>
           </button>
           <button type="button" className="outline" onClick={() => handleLogin('employee')}>
-            Continue as Employee ({loginNames.employee})
+            Continue as Employee
+            <span className="muted" style={{ fontSize: '0.85rem', display: 'block', marginTop: '0.25rem' }}>
+              {loginNames.employee}
+            </span>
           </button>
         </div>
         <p className="muted small">
