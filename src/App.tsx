@@ -296,6 +296,41 @@ ${invoice.notes ? `Notes: ${invoice.notes}` : ''}
     URL.revokeObjectURL(url)
   }
 
+  const handleForwardToClient = (invoice: InvoiceWorkflowRecord) => {
+    const client = CLIENT_DIRECTORY.find((c) => c.id === invoice.clientId)
+    if (!client) return
+
+    // Create email content for forwarding
+    const emailContent = `
+Dear ${client.contactName},
+
+Please find attached the invoice ${invoice.invoiceNumber} for ${invoice.engagement}.
+
+Invoice Details:
+- Invoice Number: ${invoice.invoiceNumber}
+- Issue Date: ${invoice.issueDate}
+- Due Date: ${invoice.dueDate}
+- Amount: ${invoice.currency} ${invoice.amount}
+- Status: ${invoice.status}
+
+You can download the invoice using the link below:
+${window.location.origin}/invoice/${invoice.id}
+
+Please let us know if you have any questions.
+
+Best regards,
+${displayName}
+${role === 'ceo' ? 'CEO' : 'Employee'}
+${ORGANIZATION.displayName}
+    `.trim()
+
+    // Create a mailto link
+    const subject = `Invoice ${invoice.invoiceNumber} - ${ORGANIZATION.displayName}`
+    const mailtoLink = `mailto:${client.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailContent)}`
+    
+    window.open(mailtoLink, '_blank')
+  }
+
   const unreadCount = useMemo(
     () => notifications.filter((n) => n.recipientRole === role && n.status === 'unread').length,
     [notifications, role],
