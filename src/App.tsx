@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import './App.css'
 import {
   ACTIVITY_LOG,
@@ -70,7 +70,7 @@ const summarize = (records: InvoiceRecord[]) => {
 }
 
 function App() {
-  const [activeView, setActiveView] = useState<AppView>('dashboard')
+  const [activeView, setActiveView] = useState<AppView>('login')
   const [role, setRole] = useState<UserRole | null>(null)
   const [displayName, setDisplayName] = useState<string>('')
   const [workflowLedger, setWorkflowLedger] = useState<InvoiceWorkflowRecord[]>(INVOICE_WORKFLOW_LEDGER)
@@ -84,14 +84,6 @@ function App() {
     }),
     [],
   )
-
-  // Auto-login for development
-  useEffect(() => {
-    if (!role) {
-      setRole('ceo')
-      setDisplayName('Ananya Iyer')
-    }
-  }, [role])
 
   const overviewStats = useMemo(() => summarize(workflowLedger), [workflowLedger])
   const recentInvoices = useMemo(
@@ -273,33 +265,35 @@ function App() {
     return { totalVolume, successRate, failureCount, pendingCount, recentTransactions }
   }, [])
 
+  // Dashboard data calculations
+  const dashboardRecentInvoices = useMemo(
+    () =>
+      [...workflowLedger]
+        .sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime())
+        .slice(0, 6),
+    [workflowLedger],
+  )
+
+  const dashboardPendingInvoices = useMemo(() => 
+    workflowLedger.filter(inv => inv.approvalStatus === 'AwaitingApproval'), 
+    [workflowLedger]
+  )
+
+  const dashboardApprovedInvoices = useMemo(() => 
+    workflowLedger.filter(inv => inv.approvalStatus === 'Approved'), 
+    [workflowLedger]
+  )
+
+  const dashboardTotalRevenue = useMemo(() => 
+    dashboardApprovedInvoices.reduce((sum, inv) => sum + inv.amount, 0), 
+    [dashboardApprovedInvoices]
+  )
+
   const renderStatusChip = (status: InvoiceStatus) => (
     <span className={`status-chip ${statusTone[status]}`}>{status}</span>
   )
 
   const renderDashboard = () => {
-    const recentInvoices = useMemo(
-      () =>
-        [...workflowLedger]
-          .sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime())
-          .slice(0, 6),
-      [workflowLedger],
-    )
-
-    const pendingInvoices = useMemo(() => 
-      workflowLedger.filter(inv => inv.approvalStatus === 'AwaitingApproval'), 
-      [workflowLedger]
-    )
-
-    const approvedInvoices = useMemo(() => 
-      workflowLedger.filter(inv => inv.approvalStatus === 'Approved'), 
-      [workflowLedger]
-    )
-
-    const totalRevenue = useMemo(() => 
-      approvedInvoices.reduce((sum, inv) => sum + inv.amount, 0), 
-      [approvedInvoices]
-    )
 
     return (
       <div className="visual-dashboard">
@@ -311,20 +305,20 @@ function App() {
           <div className="dashboard-stats">
             <div className="stat-circle">
               <div className="circle-progress" style={{ 
-                background: `conic-gradient(#10b981 0deg ${(approvedInvoices.length / workflowLedger.length) * 360}deg, #e5e7eb 0deg)` 
+                background: `conic-gradient(#10b981 0deg ${(dashboardApprovedInvoices.length / workflowLedger.length) * 360}deg, #e5e7eb 0deg)` 
               }}>
                 <div className="circle-inner">
-                  <strong>{approvedInvoices.length}</strong>
+                  <strong>{dashboardApprovedInvoices.length}</strong>
                   <span>Approved</span>
                 </div>
               </div>
             </div>
             <div className="stat-circle">
               <div className="circle-progress" style={{ 
-                background: `conic-gradient(#f59e0b 0deg ${(pendingInvoices.length / workflowLedger.length) * 360}deg, #e5e7eb 0deg)` 
+                background: `conic-gradient(#f59e0b 0deg ${(dashboardPendingInvoices.length / workflowLedger.length) * 360}deg, #e5e7eb 0deg)` 
               }}>
                 <div className="circle-inner">
-                  <strong>{pendingInvoices.length}</strong>
+                  <strong>{dashboardPendingInvoices.length}</strong>
                   <span>Pending</span>
                 </div>
               </div>
@@ -337,7 +331,7 @@ function App() {
                     style: 'currency',
                     currency: 'INR',
                     maximumFractionDigits: 0,
-                  }).format(totalRevenue)}
+                  }).format(dashboardTotalRevenue)}
                 </strong>
                 <span>Total Revenue</span>
               </div>
@@ -381,7 +375,7 @@ function App() {
               <p>Latest invoice updates and actions</p>
             </header>
             <div className="activity-timeline">
-              {recentInvoices.slice(0, 4).map((invoice) => (
+              {dashboardRecentInvoices.slice(0, 4).map((invoice) => (
                 <div key={invoice.id} className="timeline-item">
                   <div className={`timeline-dot ${invoice.approvalStatus.toLowerCase()}`}></div>
                   <div className="timeline-content">
@@ -424,7 +418,7 @@ function App() {
               <div className="metric-item">
                 <div className="metric-icon">⚡</div>
                 <div className="metric-details">
-                  <strong>{Math.round((approvedInvoices.length / workflowLedger.length) * 100)}%</strong>
+                  <strong>{Math.round((dashboardApprovedInvoices.length / workflowLedger.length) * 100)}%</strong>
                   <span>Approval Rate</span>
                 </div>
               </div>
@@ -542,6 +536,25 @@ function App() {
 
   const renderContent = () => {
     switch (activeView) {
+      case 'login':
+        return (
+          <div className="login-container">
+            <div className="login-card">
+              <header className="login-header">
+                <h1>Invoice Billing System</h1>
+                <p>Select your role to continue</p>
+              </header>
+              <div className="login-options">
+                <button type="button" className="primary" onClick={() => handleLogin('ceo')}>
+                  Login as CEO
+                </button>
+                <button type="button" className="outline" onClick={() => handleLogin('employee')}>
+                  Login as Employee
+                </button>
+              </div>
+            </div>
+          </div>
+        )
       case 'dashboard':
         return renderDashboard()
       case 'proposal-detail':
