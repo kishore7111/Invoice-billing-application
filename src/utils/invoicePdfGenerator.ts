@@ -427,7 +427,7 @@ export const generateInvoiceHtml = (invoice: InvoiceWorkflowRecord): string => {
 }
 
 export const generatePdfFromHtml = (html: string): void => {
-  // Create a new window for printing
+  // Create a new window for printing to PDF
   const printWindow = window.open('', '_blank')
   if (printWindow) {
     printWindow.document.write(html)
@@ -444,21 +444,105 @@ export const generatePdfFromHtml = (html: string): void => {
 }
 
 export const downloadPdfFromHtml = (html: string, filename: string): void => {
-  // Create a blob from the HTML content
-  const blob = new Blob([html], { type: 'text/html' })
-  const url = URL.createObjectURL(blob)
-  
-  // Create a temporary anchor element to trigger the download
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${filename}.html`
-  a.style.display = 'none'
-  
-  // Append to body, click and remove
-  document.body.appendChild(a)
-  a.click()
-  document.body.removeChild(a)
-  
-  // Clean up
-  URL.revokeObjectURL(url)
+  // Create a new window for PDF generation and download
+  const printWindow = window.open('', '_blank', 'width=800,height=600')
+  if (printWindow) {
+    printWindow.document.write(html)
+    printWindow.document.close()
+    
+    // Wait for the content to load, then trigger print dialog
+    printWindow.onload = () => {
+      setTimeout(() => {
+        // Trigger print dialog - user can choose "Save as PDF"
+        printWindow.print()
+        
+        // Alternative approach: Create a blob and download
+        const blob = new Blob([html], { type: 'text/html' })
+        const url = URL.createObjectURL(blob)
+        
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${filename}.html`
+        a.style.display = 'none'
+        
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        URL.revokeObjectURL(url)
+        
+        printWindow.close()
+      }, 1000)
+    }
+  }
+}
+
+export const generateAndDownloadPdf = (html: string, filename: string): void => {
+  // Use the browser's print functionality to generate PDF
+  const printWindow = window.open('', '_blank', 'width=800,height=600')
+  if (printWindow) {
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${filename}</title>
+        <style>
+          @media print {
+            @page {
+              margin: 0.5in;
+              size: A4;
+            }
+            body {
+              margin: 0;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+          }
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+          }
+          .no-print {
+            display: none;
+          }
+          @media screen {
+            .print-only {
+              display: none;
+            }
+            .no-print {
+              display: block;
+              padding: 20px;
+              background: #f0f0f0;
+              border-bottom: 1px solid #ccc;
+              text-align: center;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="no-print">
+          <h2>Invoice Preview</h2>
+          <p>Use your browser's "Print" function to save as PDF</p>
+          <p>Or press Ctrl+P (Windows) / Cmd+P (Mac)</p>
+        </div>
+        ${html}
+        <script>
+          window.onload = function() {
+            setTimeout(() => {
+              window.print();
+            }, 500);
+          }
+        </script>
+      </body>
+      </html>
+    `)
+    printWindow.document.close()
+    
+    // Auto-trigger print dialog
+    printWindow.onload = () => {
+      setTimeout(() => {
+        printWindow.print()
+      }, 1000)
+    }
+  }
 }

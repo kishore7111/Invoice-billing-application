@@ -3,7 +3,7 @@ import { ViewIcon } from './components/common/icons/ViewIcon'
 import { DownloadIcon } from './components/common/icons/DownloadIcon'
 import { ForwardIcon } from './components/common/icons/ForwardIcon'
 import './components/common/styles/actionButtons.css'
-import { generateInvoiceHtml, generatePdfFromHtml, downloadPdfFromHtml } from './utils/invoicePdfGenerator'
+import { generateInvoiceHtml, generatePdfFromHtml, generateAndDownloadPdf } from './utils/invoicePdfGenerator'
 import './App.css'
 import {
   ACTIVITY_LOG,
@@ -222,7 +222,7 @@ function App() {
 
   const handleDownloadInvoice = (invoice: InvoiceWorkflowRecord) => {
     const invoiceHtml = generateInvoiceHtml(invoice)
-    downloadPdfFromHtml(invoiceHtml, `invoice-${invoice.invoiceNumber}`)
+    generateAndDownloadPdf(invoiceHtml, `invoice-${invoice.invoiceNumber}`)
   }
 
   const handleForwardToClient = (invoice: InvoiceWorkflowRecord) => {
@@ -270,7 +270,7 @@ ${ORGANIZATION.contact.phone}
     
     // Also trigger a download of the PDF for the user to attach manually
     setTimeout(() => {
-      downloadPdfFromHtml(invoiceHtml, `invoice-${invoice.invoiceNumber}`)
+      generateAndDownloadPdf(invoiceHtml, `invoice-${invoice.invoiceNumber}`)
     }, 1000)
   }
 
