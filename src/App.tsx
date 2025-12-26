@@ -3,6 +3,7 @@ import { ViewIcon } from './components/common/icons/ViewIcon'
 import { DownloadIcon } from './components/common/icons/DownloadIcon'
 import { ForwardIcon } from './components/common/icons/ForwardIcon'
 import './components/common/styles/actionButtons.css'
+import { generateInvoiceHtml, generatePdfFromHtml, downloadPdfFromHtml } from './utils/invoicePdfGenerator'
 import './App.css'
 import {
   ACTIVITY_LOG,
@@ -215,117 +216,50 @@ function App() {
   }
 
   const handleViewInvoice = (invoice: InvoiceWorkflowRecord) => {
-    // Create a simple invoice preview in a new window
-    const invoiceContent = `
-      <html>
-        <head>
-          <title>Invoice ${invoice.invoiceNumber}</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 40px; }
-            .header { text-align: center; margin-bottom: 40px; }
-            .invoice-details { margin: 20px 0; }
-            .line-items { margin: 20px 0; }
-            .line-item { display: flex; justify-content: space-between; margin: 10px 0; }
-            .total { font-weight: bold; margin-top: 20px; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1>Invoice</h1>
-            <p>${invoice.invoiceNumber}</p>
-          </div>
-          <div class="invoice-details">
-            <p><strong>Client:</strong> ${CLIENT_DIRECTORY.find(c => c.id === invoice.clientId)?.companyName || 'N/A'}</p>
-            <p><strong>Engagement:</strong> ${invoice.engagement}</p>
-            <p><strong>Issue Date:</strong> ${invoice.issueDate}</p>
-            <p><strong>Due Date:</strong> ${invoice.dueDate}</p>
-            <p><strong>Status:</strong> ${invoice.status}</p>
-            <p><strong>Approval:</strong> ${invoice.approvalStatus}</p>
-          </div>
-          <div class="line-items">
-            <h3>Line Items</h3>
-            ${invoice.lineItems?.map(item => `
-              <div class="line-item">
-                <span>${item.description} (${item.quantity} x ${invoice.currency} ${item.unitPrice})</span>
-                <span>${invoice.currency} ${item.quantity * item.unitPrice}</span>
-              </div>
-            `).join('') || '<p>No line items available</p>'}
-          </div>
-          <div class="total">
-            <p><strong>Total Amount:</strong> ${invoice.currency} ${invoice.amount}</p>
-          </div>
-          ${invoice.notes ? `<div class="notes"><p><strong>Notes:</strong> ${invoice.notes}</p></div>` : ''}
-        </body>
-      </html>
-    `
-    
-    const newWindow = window.open('', '_blank')
-    if (newWindow) {
-      newWindow.document.write(invoiceContent)
-      newWindow.document.close()
-    }
+    const invoiceHtml = generateInvoiceHtml(invoice)
+    generatePdfFromHtml(invoiceHtml)
   }
 
   const handleDownloadInvoice = (invoice: InvoiceWorkflowRecord) => {
-    // Create a text version for download
-    const invoiceText = `
-INVOICE: ${invoice.invoiceNumber}
-=====================================
-
-Client: ${CLIENT_DIRECTORY.find(c => c.id === invoice.clientId)?.companyName || 'N/A'}
-Engagement: ${invoice.engagement}
-Issue Date: ${invoice.issueDate}
-Due Date: ${invoice.dueDate}
-Status: ${invoice.status}
-Approval Status: ${invoice.approvalStatus}
-
-LINE ITEMS:
-${invoice.lineItems?.map(item => 
-  `${item.description} - Quantity: ${item.quantity}, Unit Price: ${invoice.currency} ${item.unitPrice}, Total: ${invoice.currency} ${item.quantity * item.unitPrice}`
-).join('\n') || 'No line items available'}
-
-TOTAL AMOUNT: ${invoice.currency} ${invoice.amount}
-
-${invoice.notes ? `Notes: ${invoice.notes}` : ''}
-    `.trim()
-
-    const blob = new Blob([invoiceText], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `invoice-${invoice.invoiceNumber}.txt`
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    const invoiceHtml = generateInvoiceHtml(invoice)
+    downloadPdfFromHtml(invoiceHtml, `invoice-${invoice.invoiceNumber}`)
   }
 
   const handleForwardToClient = (invoice: InvoiceWorkflowRecord) => {
     const client = CLIENT_DIRECTORY.find((c) => c.id === invoice.clientId)
     if (!client) return
 
+    // Generate the invoice HTML for potential PDF attachment
+    const invoiceHtml = generateInvoiceHtml(invoice)
+    
     // Create email content for forwarding
     const emailContent = `
 Dear ${client.contactName},
 
-Please find attached the invoice ${invoice.invoiceNumber} for ${invoice.engagement}.
+Please find attached Invoice #${invoice.invoiceNumber} for ${invoice.engagement}.
 
 Invoice Details:
 - Invoice Number: ${invoice.invoiceNumber}
-- Issue Date: ${invoice.issueDate}
-- Due Date: ${invoice.dueDate}
-- Amount: ${invoice.currency} ${invoice.amount}
+- Issue Date: ${new Date(invoice.issueDate).toLocaleDateString()}
+- Due Date: ${new Date(invoice.dueDate).toLocaleDateString()}
+- Amount: ${invoice.currency} ${invoice.amount.toFixed(2)}
 - Status: ${invoice.status}
 
-You can download the invoice using the link below:
-${window.location.origin}/invoice/${invoice.id}
+A detailed PDF invoice has been generated and can be downloaded from the invoice ledger. Please let us know if you need any assistance with the payment process.
 
-Please let us know if you have any questions.
+Payment Information:
+- Bank: ${ORGANIZATION.bank.bankName}
+- Account Number: ${ORGANIZATION.bank.accountNumber}
+- IFSC Code: ${ORGANIZATION.bank.ifsc}
+
+Please don't hesitate to contact us if you have any questions regarding this invoice.
 
 Best regards,
 ${displayName}
 ${role === 'ceo' ? 'CEO' : 'Employee'}
 ${ORGANIZATION.displayName}
+${ORGANIZATION.contact.email}
+${ORGANIZATION.contact.phone}
     `.trim()
 
     // Create a mailto link
@@ -333,6 +267,11 @@ ${ORGANIZATION.displayName}
     const mailtoLink = `mailto:${client.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailContent)}`
     
     window.open(mailtoLink, '_blank')
+    
+    // Also trigger a download of the PDF for the user to attach manually
+    setTimeout(() => {
+      downloadPdfFromHtml(invoiceHtml, `invoice-${invoice.invoiceNumber}`)
+    }, 1000)
   }
 
   const unreadCount = useMemo(
