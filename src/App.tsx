@@ -210,6 +210,92 @@ function App() {
     setActiveView('login')
   }
 
+  const handleViewInvoice = (invoice: InvoiceWorkflowRecord) => {
+    // Create a simple invoice preview in a new window
+    const invoiceContent = `
+      <html>
+        <head>
+          <title>Invoice ${invoice.invoiceNumber}</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 40px; }
+            .header { text-align: center; margin-bottom: 40px; }
+            .invoice-details { margin: 20px 0; }
+            .line-items { margin: 20px 0; }
+            .line-item { display: flex; justify-content: space-between; margin: 10px 0; }
+            .total { font-weight: bold; margin-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Invoice</h1>
+            <p>${invoice.invoiceNumber}</p>
+          </div>
+          <div class="invoice-details">
+            <p><strong>Client:</strong> ${CLIENT_DIRECTORY.find(c => c.id === invoice.clientId)?.companyName || 'N/A'}</p>
+            <p><strong>Engagement:</strong> ${invoice.engagement}</p>
+            <p><strong>Issue Date:</strong> ${invoice.issueDate}</p>
+            <p><strong>Due Date:</strong> ${invoice.dueDate}</p>
+            <p><strong>Status:</strong> ${invoice.status}</p>
+            <p><strong>Approval:</strong> ${invoice.approvalStatus}</p>
+          </div>
+          <div class="line-items">
+            <h3>Line Items</h3>
+            ${invoice.lineItems?.map(item => `
+              <div class="line-item">
+                <span>${item.description} (${item.quantity} x ${invoice.currency} ${item.unitPrice})</span>
+                <span>${invoice.currency} ${item.quantity * item.unitPrice}</span>
+              </div>
+            `).join('') || '<p>No line items available</p>'}
+          </div>
+          <div class="total">
+            <p><strong>Total Amount:</strong> ${invoice.currency} ${invoice.amount}</p>
+          </div>
+          ${invoice.notes ? `<div class="notes"><p><strong>Notes:</strong> ${invoice.notes}</p></div>` : ''}
+        </body>
+      </html>
+    `
+    
+    const newWindow = window.open('', '_blank')
+    if (newWindow) {
+      newWindow.document.write(invoiceContent)
+      newWindow.document.close()
+    }
+  }
+
+  const handleDownloadInvoice = (invoice: InvoiceWorkflowRecord) => {
+    // Create a text version for download
+    const invoiceText = `
+INVOICE: ${invoice.invoiceNumber}
+=====================================
+
+Client: ${CLIENT_DIRECTORY.find(c => c.id === invoice.clientId)?.companyName || 'N/A'}
+Engagement: ${invoice.engagement}
+Issue Date: ${invoice.issueDate}
+Due Date: ${invoice.dueDate}
+Status: ${invoice.status}
+Approval Status: ${invoice.approvalStatus}
+
+LINE ITEMS:
+${invoice.lineItems?.map(item => 
+  `${item.description} - Quantity: ${item.quantity}, Unit Price: ${invoice.currency} ${item.unitPrice}, Total: ${invoice.currency} ${item.quantity * item.unitPrice}`
+).join('\n') || 'No line items available'}
+
+TOTAL AMOUNT: ${invoice.currency} ${invoice.amount}
+
+${invoice.notes ? `Notes: ${invoice.notes}` : ''}
+    `.trim()
+
+    const blob = new Blob([invoiceText], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `invoice-${invoice.invoiceNumber}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
+
   const unreadCount = useMemo(
     () => notifications.filter((n) => n.recipientRole === role && n.status === 'unread').length,
     [notifications, role],
