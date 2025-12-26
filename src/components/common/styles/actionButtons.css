@@ -1,0 +1,47 @@
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.action-button {
+  background: none;
+  border: none;
+  color: #4a5568;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+
+.action-button:hover {
+  background-color: #f0f4f8;
+  color: #3182ce;
+}
+
+.action-button.download {
+  color: #38a169;
+}
+
+.action-button.forward {
+  color: #3182ce;
+}
+
+.action-button.view {
+  color: #4a5568;
+}
+
+.action-button:focus {
+  outline: 2px solid #3182ce;
+  outline-offset: 2px;
+}
+
+/* Ensure tooltips are visible */
+[title] {
+  position: relative;
+}

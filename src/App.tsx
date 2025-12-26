@@ -1,4 +1,8 @@
 import { useMemo, useState } from 'react'
+import { ViewIcon } from './components/common/icons/ViewIcon'
+import { DownloadIcon } from './components/common/icons/DownloadIcon'
+import { ForwardIcon } from './components/common/icons/ForwardIcon'
+import './components/common/styles/actionButtons.css'
 import './App.css'
 import {
   ACTIVITY_LOG,
@@ -761,21 +765,63 @@ ${ORGANIZATION.displayName}
                       {invoice.approvalStatus.replace(/([A-Z])/g, ' $1')}
                     </span>
                     <span className="actions-cell">
-                      {canApprove ? (
-                        <div className="action-stack">
-                          <button type="button" className="ghost" onClick={() => handleApprovalUpdate(invoice.id, 'Approved')}>
-                            Approve
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {canApprove ? (
+                          <div className="action-stack">
+                            <button type="button" className="ghost" onClick={() => handleApprovalUpdate(invoice.id, 'Approved')}>
+                              Approve
+                            </button>
+                            <button type="button" className="ghost" onClick={() => handleApprovalUpdate(invoice.id, 'NeedsEdits')}>
+                              Request edits
+                            </button>
+                            <button type="button" className="ghost danger" onClick={() => handleApprovalUpdate(invoice.id, 'Rejected')}>
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="muted" style={{ minWidth: '24px' }}>—</span>
+                        )}
+                        
+                        <div className="action-buttons">
+                          <button
+                            className="action-button view"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewInvoice(invoice);
+                            }}
+                            title="View Invoice"
+                            aria-label="View invoice details"
+                          >
+                            <ViewIcon />
                           </button>
-                          <button type="button" className="ghost" onClick={() => handleApprovalUpdate(invoice.id, 'NeedsEdits')}>
-                            Request edits
+
+                          <button
+                            className="action-button download"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadInvoice(invoice);
+                            }}
+                            title="Download Invoice"
+                            aria-label="Download invoice"
+                          >
+                            <DownloadIcon />
                           </button>
-                          <button type="button" className="ghost danger" onClick={() => handleApprovalUpdate(invoice.id, 'Rejected')}>
-                            Reject
-                          </button>
+
+                          {invoice.approvalStatus === 'Approved' && (
+                            <button
+                              className="action-button forward"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleForwardToClient(invoice);
+                              }}
+                              title="Forward to Client"
+                              aria-label="Forward invoice to client"
+                            >
+                              <ForwardIcon />
+                            </button>
+                          )}
                         </div>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
+                      </div>
                     </span>
                     <span>
                       {new Intl.NumberFormat('en-IN', {
