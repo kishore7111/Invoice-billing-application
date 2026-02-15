@@ -305,7 +305,7 @@ export const INVOICE_LEDGER: InvoiceRecord[] = [
     status: 'Paid',
     issueDate: '2025-04-01',
     dueDate: '2025-04-16',
-    lastUpdated: '2025-04-13',
+    lastUpdated: '2024-04-13',
   },
   {
     id: 'inv-005',
@@ -317,7 +317,7 @@ export const INVOICE_LEDGER: InvoiceRecord[] = [
     status: 'Paid',
     issueDate: '2025-03-31',
     dueDate: '2025-04-15',
-    lastUpdated: '2025-04-10',
+    lastUpdated: '2024-04-10',
   },
   {
     id: 'inv-006',
@@ -326,7 +326,7 @@ export const INVOICE_LEDGER: InvoiceRecord[] = [
     engagement: 'API Integration Support',
     currency: 'INR',
     amount: 132000,
-    status: 'Draft',
+    status: 'Awaiting Approval',
     issueDate: '2025-06-12',
     dueDate: '2025-06-27',
     lastUpdated: '2025-06-12',
