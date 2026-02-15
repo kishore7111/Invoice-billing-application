@@ -3,7 +3,7 @@ import './App.css'
 import {
   ACTIVITY_LOG,
   CLIENT_DIRECTORY,
-  INVOICE_LEDGER,
+  INVOICE_WORKFLOW_LEDGER,
   ORGANIZATION,
   PAYMENT_GATEWAY,
   PAYMENT_TRANSACTIONS,
@@ -11,12 +11,23 @@ import {
 import type {
   ActivityLog,
   InvoiceRecord,
+  InvoiceWorkflowRecord,
   InvoiceStatus,
+  NotificationMessage,
   PaymentGatewayChannel,
 } from './types'
 import { InvoiceBuilder } from './components/InvoiceBuilder'
 
-type AppView = 'overview' | 'invoices' | 'builder' | 'clients' | 'team' | 'settings' | 'payments'
+type AppView =
+  | 'login'
+  | 'overview'
+  | 'invoices'
+  | 'builder'
+  | 'clients'
+  | 'team'
+  | 'settings'
+  | 'payments'
+  | 'notifications'
 
 const statusTone: Record<InvoiceStatus, string> = {
   Draft: 'draft',
@@ -109,18 +120,18 @@ function App() {
     }
   }
 
-  const overviewStats = useMemo(() => summarize(INVOICE_LEDGER), [])
+  const overviewStats = useMemo(() => summarize(workflowLedger), [workflowLedger])
   const recentInvoices = useMemo(
     () =>
-      [...INVOICE_LEDGER]
+      [...workflowLedger]
         .sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime())
         .slice(0, 5),
-    [],
+    [workflowLedger],
   )
 
   const filteredInvoices = useMemo(() => {
     if (activeView === 'invoices') {
-      return INVOICE_LEDGER
+      return workflowLedger
     }
     if (activeView === 'overview') {
       return recentInvoices
@@ -166,6 +177,44 @@ function App() {
 
   const renderContent = () => {
     switch (activeView) {
+      case 'notifications':
+        return (
+          <section className="module-card">
+            <header className="module-heading">
+              <div>
+                <h2>Notifications</h2>
+                <p>Approval requests and status updates.</p>
+              </div>
+            </header>
+            <div className="notification-list">
+              {notifications
+                .filter((note) => note.recipientRole === role)
+                .map((note) => (
+                  <article key={note.id} className={`notification-card ${note.status}`}>
+                    <header>
+                      <span>{new Date(note.timestamp).toLocaleString('en-IN')}</span>
+                      {note.actionRequired ? <span className="chip warning">Action needed</span> : null}
+                    </header>
+                    <p>{note.message}</p>
+                    {note.relatedInvoiceId ? <small>Invoice: {note.relatedInvoiceId.toUpperCase()}</small> : null}
+                    {note.status === 'unread' ? (
+                      <button
+                        type="button"
+                        className="ghost"
+                        onClick={() =>
+                          setNotifications((prev) =>
+                            prev.map((n) => (n.id === note.id ? { ...n, status: 'read' } : n)),
+                          )
+                        }
+                      >
+                        Mark as read
+                      </button>
+                    ) : null}
+                  </article>
+                ))}
+            </div>
+          </section>
+        )
       case 'builder':
         return <InvoiceBuilder />
       case 'invoices':
@@ -188,10 +237,13 @@ function App() {
                 <span>Issued</span>
                 <span>Due</span>
                 <span>Status</span>
+                <span>Approval</span>
+                <span>Actions</span>
                 <span>Amount</span>
               </div>
               {filteredInvoices.map((invoice) => {
                 const client = CLIENT_DIRECTORY.find((c) => c.id === invoice.clientId)
+                const canApprove = role === 'ceo' && invoice.createdBy === 'employee'
                 return (
                   <div key={invoice.id} className="table-row invoice">
                     <span>
@@ -203,6 +255,26 @@ function App() {
                     <span>{invoice.issueDate}</span>
                     <span>{invoice.dueDate}</span>
                     <span>{renderStatusChip(invoice.status)}</span>
+                    <span className={`approval-chip ${invoice.approvalStatus.toLowerCase()}`}>
+                      {invoice.approvalStatus.replace(/([A-Z])/g, ' $1')}
+                    </span>
+                    <span className="actions-cell">
+                      {canApprove ? (
+                        <div className="action-stack">
+                          <button type="button" className="ghost" onClick={() => handleApprovalUpdate(invoice.id, 'Approved')}>
+                            Approve
+                          </button>
+                          <button type="button" className="ghost" onClick={() => handleApprovalUpdate(invoice.id, 'NeedsEdits')}>
+                            Request edits
+                          </button>
+                          <button type="button" className="ghost danger" onClick={() => handleApprovalUpdate(invoice.id, 'Rejected')}>
+                            Reject
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="muted">—</span>
+                      )}
+                    </span>
                     <span>
                       {new Intl.NumberFormat('en-IN', {
                         style: 'currency',
@@ -395,6 +467,10 @@ function App() {
     }
   }
 
+  if (!role) {
+    return renderLogin()
+  }
+
   return (
     <div className="app-shell">
       {isMobileView && (
@@ -477,6 +553,13 @@ function App() {
             onClick={() => setActiveView('payments')}
           >
             Payments
+          </button>
+          <button
+            type="button"
+            className={activeView === 'notifications' ? 'active' : ''}
+            onClick={() => setActiveView('notifications')}
+          >
+            Notifications {unreadCount ? <span className="badge">{unreadCount}</span> : null}
           </button>
         </nav>
         <footer className="nav-group" style={{ marginTop: 'auto' }}>

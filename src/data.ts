@@ -2,6 +2,8 @@ import type {
   ActivityLog,
   ClientProfile,
   InvoiceRecord,
+  InvoiceWorkflowRecord,
+  NotificationMessage,
   PaymentGatewayConfig,
   PaymentTransaction,
   Service,
@@ -90,6 +92,35 @@ export const SERVICE_CATALOG: Service[] = [
       'Secure API integration including documentation, testing, and deployment support.',
     unit: 'Integration Package',
     unitRate: 132000,
+  },
+]
+
+export const SEED_NOTIFICATIONS: NotificationMessage[] = [
+  {
+    id: 'note-001',
+    recipientRole: 'ceo',
+    message: 'Priya Shah submitted invoice ADS-2025-043 for approval.',
+    timestamp: '2025-06-12T10:10:00+05:30',
+    relatedInvoiceId: 'inv-001',
+    status: 'unread',
+    actionRequired: true,
+  },
+  {
+    id: 'note-002',
+    recipientRole: 'employee',
+    message: 'Invoice ADS-2025-034 approved by Ananya Iyer. Ready to share with client.',
+    timestamp: '2025-06-11T18:05:00+05:30',
+    relatedInvoiceId: 'inv-004',
+    status: 'read',
+  },
+  {
+    id: 'note-003',
+    recipientRole: 'employee',
+    message: 'Invoice ADS-2025-041 requires edits before approval.',
+    timestamp: '2025-06-11T09:30:00+05:30',
+    relatedInvoiceId: 'inv-002',
+    status: 'unread',
+    actionRequired: true,
   },
 ]
 
@@ -299,6 +330,45 @@ export const INVOICE_LEDGER: InvoiceRecord[] = [
     issueDate: '2025-06-12',
     dueDate: '2025-06-27',
     lastUpdated: '2025-06-12',
+  },
+]
+
+export const INVOICE_WORKFLOW_LEDGER: InvoiceWorkflowRecord[] = [
+  {
+    ...INVOICE_LEDGER[0],
+    approvalStatus: 'AwaitingApproval',
+    createdBy: 'employee',
+    clientViewUrl: 'https://auroradigital.in/invoices/ADS-2025-043',
+  },
+  {
+    ...INVOICE_LEDGER[1],
+    approvalStatus: 'NeedsEdits',
+    createdBy: 'employee',
+    clientViewUrl: 'https://auroradigital.in/invoices/ADS-2025-041',
+  },
+  {
+    ...INVOICE_LEDGER[2],
+    approvalStatus: 'Approved',
+    createdBy: 'ceo',
+    clientViewUrl: 'https://auroradigital.in/invoices/ADS-2025-039',
+  },
+  {
+    ...INVOICE_LEDGER[3],
+    approvalStatus: 'Approved',
+    createdBy: 'employee',
+    clientViewUrl: 'https://auroradigital.in/invoices/ADS-2025-034',
+  },
+  {
+    ...INVOICE_LEDGER[4],
+    approvalStatus: 'Approved',
+    createdBy: 'employee',
+    clientViewUrl: 'https://auroradigital.in/invoices/ADS-2025-029',
+  },
+  {
+    ...INVOICE_LEDGER[5],
+    approvalStatus: 'AwaitingApproval',
+    createdBy: 'employee',
+    clientViewUrl: 'https://auroradigital.in/invoices/ADS-2025-045',
   },
 ]
 

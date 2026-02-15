@@ -99,6 +99,26 @@ export interface InvoiceRecord {
   lastUpdated: string
 }
 
+export type UserRole = 'ceo' | 'employee'
+
+export type ApprovalStatus = 'AwaitingApproval' | 'Approved' | 'Rejected' | 'NeedsEdits'
+
+export interface InvoiceWorkflowRecord extends InvoiceRecord {
+  approvalStatus: ApprovalStatus
+  createdBy: 'employee' | 'ceo'
+  clientViewUrl?: string
+}
+
+export interface NotificationMessage {
+  id: string
+  recipientRole: UserRole
+  message: string
+  timestamp: string
+  relatedInvoiceId?: string
+  status: 'unread' | 'read'
+  actionRequired?: boolean
+}
+
 export interface StoredInvoice {
   id: string
   invoiceNumber: string
