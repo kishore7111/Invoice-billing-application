@@ -99,6 +99,13 @@ export interface InvoiceRecord {
   lastUpdated: string
 }
 
+export interface StoredInvoice {
+  id: string
+  invoiceNumber: string
+  savedAt: string
+  formState: InvoiceFormState
+}
+
 export interface ActivityLog {
   id: string
   timestamp: string
