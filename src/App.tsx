@@ -1,9 +1,4 @@
-import { useMemo, useState } from 'react'
-import { ViewIcon } from './components/common/icons/ViewIcon'
-import { DownloadIcon } from './components/common/icons/DownloadIcon'
-import { ForwardIcon } from './components/common/icons/ForwardIcon'
-import './components/common/styles/actionButtons.css'
-import { generateInvoiceHtml, generatePdfFromHtml, generateAndDownloadPdf } from './utils/invoicePdfGenerator'
+import { useMemo, useState, useEffect } from 'react'
 import './App.css'
 import {
   ACTIVITY_LOG,
@@ -12,10 +7,6 @@ import {
   ORGANIZATION,
   PAYMENT_GATEWAY,
   PAYMENT_TRANSACTIONS,
-  SERVICE_CATALOG,
-  SERVICE_SHOWCASES,
-  TEAM_MEMBERS,
-  SEED_NOTIFICATIONS,
 } from './data'
 import type {
   InvoiceRecord,
@@ -23,11 +14,6 @@ import type {
   InvoiceStatus,
   NotificationMessage,
   PaymentGatewayChannel,
-  PaymentTransaction,
-  UserRole,
-  ApprovalStatus,
-  ServiceShowcase,
-  InvoiceFormState,
 } from './types'
 import { InvoiceBuilder } from './components/InvoiceBuilder'
 
@@ -47,15 +33,19 @@ type AppView =
 const statusTone: Record<InvoiceStatus, string> = {
   Draft: 'draft',
   Pending: 'pending',
+  'Awaiting Approval': 'pending',
+  Approved: 'paid',
+  Sent: 'pending',
   Paid: 'paid',
   Overdue: 'overdue',
+  Void: 'draft',
 }
 
 const summarize = (records: InvoiceRecord[]) => {
   const totals = records.reduce(
     (acc, inv) => {
       acc.overall += inv.amount
-      acc[inv.status] += inv.amount
+      acc[inv.status] = (acc[inv.status] || 0) + inv.amount
       if (inv.status === 'Pending' || inv.status === 'Overdue') {
         acc.outstanding += inv.amount
       }
@@ -66,8 +56,12 @@ const summarize = (records: InvoiceRecord[]) => {
       outstanding: 0,
       Draft: 0,
       Pending: 0,
+      'Awaiting Approval': 0,
+      Approved: 0,
+      Sent: 0,
       Paid: 0,
       Overdue: 0,
+      Void: 0,
     } satisfies Record<InvoiceStatus | 'overall' | 'outstanding', number>,
   )
   const count = records.length
@@ -75,20 +69,57 @@ const summarize = (records: InvoiceRecord[]) => {
 }
 
 function App() {
-  const [activeView, setActiveView] = useState<AppView>('login')
-  const [role, setRole] = useState<UserRole | null>(null)
-  const [displayName, setDisplayName] = useState<string>('')
-  const [workflowLedger, setWorkflowLedger] = useState<InvoiceWorkflowRecord[]>(INVOICE_WORKFLOW_LEDGER)
-  const [notifications, setNotifications] = useState<NotificationMessage[]>(SEED_NOTIFICATIONS)
-  const [selectedProposal, setSelectedProposal] = useState<ServiceShowcase | null>(null)
-  const [editingInvoice, setEditingInvoice] = useState<InvoiceWorkflowRecord | null>(null)
-  const loginNames = useMemo(
-    () => ({
-      ceo: 'Ananya Iyer',
-      employee: 'Priya Shah',
-    }),
-    [],
-  )
+  const [activeView, setActiveView] = useState<AppView>('overview')
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isMobileView, setIsMobileView] = useState(false)
+  
+  // Check if mobile view on mount and on resize
+  useEffect(() => {
+    const checkIfMobile = () => {
+      setIsMobileView(window.innerWidth <= 1024)
+    }
+    
+    // Initial check
+    checkIfMobile()
+    
+    // Add event listener for window resize
+    window.addEventListener('resize', checkIfMobile)
+    
+    // Cleanup
+    return () => window.removeEventListener('resize', checkIfMobile)
+  }, [])
+  
+  // Close mobile menu when view changes
+  useEffect(() => {
+    if (isMobileView) {
+      setIsMobileMenuOpen(false)
+    }
+  }, [activeView, isMobileView])
+  
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const sidebar = document.querySelector('.sidebar')
+      const menuButton = document.querySelector('.mobile-menu-btn')
+      
+      if (isMobileView && isMobileMenuOpen && 
+          !sidebar?.contains(event.target as Node) && 
+          !menuButton?.contains(event.target as Node)) {
+        setIsMobileMenuOpen(false)
+      }
+    }
+    
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isMobileMenuOpen, isMobileView])
+  
+  const toggleMobileMenu = () => {
+    if (isMobileView) {
+      setIsMobileMenuOpen(!isMobileMenuOpen)
+    }
+  }
 
   const overviewStats = useMemo(() => summarize(workflowLedger), [workflowLedger])
   const recentInvoices = useMemo(
@@ -106,218 +137,13 @@ function App() {
     if (activeView === 'overview') {
       return recentInvoices
     }
-    if (activeView === 'builder') {
-      return []
-    }
-    return workflowLedger
-  }, [activeView, recentInvoices, workflowLedger])
-
-  const pushNotification = (
-    recipientRole: UserRole,
-    message: string,
-    relatedInvoiceId?: string,
-    actionRequired = false,
-  ) => {
-    const entry: NotificationMessage = {
-      id: `note-${Date.now()}`,
-      recipientRole,
-      message,
-      timestamp: new Date().toISOString(),
-      relatedInvoiceId,
-      status: 'unread',
-      actionRequired,
-    }
-    setNotifications((prev) => [entry, ...prev])
-  }
-
-  const handleApprovalUpdate = (invoiceId: string, nextStatus: ApprovalStatus) => {
-    const match = workflowLedger.find((inv) => inv.id === invoiceId)
-    setWorkflowLedger((prev) =>
-      prev.map((inv) => (inv.id === invoiceId ? { ...inv, approvalStatus: nextStatus } : inv)),
-    )
-    if (match) {
-      const actionCopy =
-        nextStatus === 'Approved'
-          ? 'approved and ready to share with client.'
-          : nextStatus === 'Rejected'
-            ? 'rejected. Please review and resubmit.'
-            : 'needs edits before approval.'
-      pushNotification(
-        'employee',
-        `Invoice ${match.invoiceNumber} ${actionCopy}`,
-        invoiceId,
-        nextStatus !== 'Approved',
-      )
-      if (nextStatus === 'Approved') {
-        pushNotification(
-          'ceo',
-          `Invoice ${match.invoiceNumber} approved. Client view link ready.`,
-          invoiceId,
-          false,
-        )
-      }
-      if (nextStatus === 'NeedsEdits') {
-        setEditingInvoice(match)
-        setActiveView('builder')
-      }
-    }
-  }
-
-  const handleCreateInvoice = () => {
-    setEditingInvoice(null)
-    setActiveView('builder')
-  }
-
-  const handleInvoiceSave = (invoiceData: InvoiceFormState) => {
-    const newInvoice: InvoiceWorkflowRecord = {
-      id: `inv-${Date.now()}`,
-      invoiceNumber: invoiceData.meta.invoiceNumber,
-      clientId: invoiceData.clientSelectionId,
-      engagement: invoiceData.meta.projectName,
-      currency: invoiceData.currency,
-      amount: invoiceData.lineItems.reduce((sum: number, item: any) => sum + item.quantity * item.unitPrice, 0),
-      status: invoiceData.status || 'Pending',
-      issueDate: invoiceData.meta.issueDate,
-      dueDate: invoiceData.meta.dueDate,
-      lastUpdated: new Date().toISOString(),
-      createdBy: role || 'employee',
-      approvalStatus: 'AwaitingApproval',
-      lineItems: invoiceData.lineItems,
-      notes: invoiceData.notes,
-    }
-    
-    setWorkflowLedger(prev => [...prev, newInvoice])
-    
-    pushNotification(
-      'ceo',
-      `New invoice ${newInvoice.invoiceNumber} created by ${role === 'ceo' ? 'CEO' : 'employee'} and requires approval.`,
-      newInvoice.id,
-      true
-    )
-    
-    setActiveView('invoices')
-  }
-
-  const handleViewProposal = (proposal: ServiceShowcase) => {
-    setSelectedProposal(proposal)
-    setActiveView('proposal-detail')
-  }
-
-  const handleLogin = (selectedRole: UserRole) => {
-    setRole(selectedRole)
-    setDisplayName(loginNames[selectedRole])
-    setActiveView('overview')
-  }
-
-  const handleLogout = () => {
-    setRole(null)
-    setDisplayName('')
-    setActiveView('login')
-  }
-
-  const handleViewInvoice = (invoice: InvoiceWorkflowRecord) => {
-    const invoiceHtml = generateInvoiceHtml(invoice)
-    generatePdfFromHtml(invoiceHtml)
-  }
-
-  const handleDownloadInvoice = (invoice: InvoiceWorkflowRecord) => {
-    const invoiceHtml = generateInvoiceHtml(invoice)
-    generateAndDownloadPdf(invoiceHtml, `invoice-${invoice.invoiceNumber}`)
-  }
-
-  const handleForwardToClient = (invoice: InvoiceWorkflowRecord) => {
-    const client = CLIENT_DIRECTORY.find((c) => c.id === invoice.clientId)
-    if (!client) return
-
-    // Generate the invoice HTML for potential PDF attachment
-    const invoiceHtml = generateInvoiceHtml(invoice)
-    
-    // Create email content for forwarding
-    const emailContent = `
-Dear ${client.contactName},
-
-Please find attached Invoice #${invoice.invoiceNumber} for ${invoice.engagement}.
-
-Invoice Details:
-- Invoice Number: ${invoice.invoiceNumber}
-- Issue Date: ${new Date(invoice.issueDate).toLocaleDateString()}
-- Due Date: ${new Date(invoice.dueDate).toLocaleDateString()}
-- Amount: ${invoice.currency} ${invoice.amount.toFixed(2)}
-- Status: ${invoice.status}
-
-A detailed PDF invoice has been generated and can be downloaded from the invoice ledger. Please let us know if you need any assistance with the payment process.
-
-Payment Information:
-- Bank: ${ORGANIZATION.bank.bankName}
-- Account Number: ${ORGANIZATION.bank.accountNumber}
-- IFSC Code: ${ORGANIZATION.bank.ifsc}
-
-Please don't hesitate to contact us if you have any questions regarding this invoice.
-
-Best regards,
-${displayName}
-${role === 'ceo' ? 'CEO' : 'Employee'}
-${ORGANIZATION.displayName}
-${ORGANIZATION.contact.email}
-${ORGANIZATION.contact.phone}
-    `.trim()
-
-    // Create a mailto link
-    const subject = `Invoice ${invoice.invoiceNumber} - ${ORGANIZATION.displayName}`
-    const mailtoLink = `mailto:${client.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(emailContent)}`
-    
-    window.open(mailtoLink, '_blank')
-    
-    // Also trigger a download of the PDF for the user to attach manually
-    setTimeout(() => {
-      generateAndDownloadPdf(invoiceHtml, `invoice-${invoice.invoiceNumber}`)
-    }, 1000)
-  }
-
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => n.recipientRole === role && n.status === 'unread').length,
-    [notifications, role],
-  )
-
-  const renderLogin = () => (
-    <div className="login-screen">
-      <div className="login-card">
-        <div className="brand" style={{ marginBottom: '2rem', justifyContent: 'center' }}>
-          <span className="glyph" style={{ width: '48px', height: '48px', fontSize: '1.6rem' }}>A</span>
-          <div style={{ textAlign: 'left' }}>
-            <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>Aurora Digital Solutions</p>
-            <strong style={{ fontSize: '1.1rem', color: 'var(--ink-800)' }}>Billing Desk</strong>
-          </div>
-        </div>
-        <h1>Sign In</h1>
-        <p>Select your role to continue to the billing portal</p>
-        <div className="login-options">
-          <button type="button" className="primary" onClick={() => handleLogin('ceo')}>
-            Continue as CEO / Admin
-            <span className="muted" style={{ fontSize: '0.85rem', display: 'block', marginTop: '0.25rem' }}>
-              {loginNames.ceo}
-            </span>
-          </button>
-          <button type="button" className="outline" onClick={() => handleLogin('employee')}>
-            Continue as Employee
-            <span className="muted" style={{ fontSize: '0.85rem', display: 'block', marginTop: '0.25rem' }}>
-              {loginNames.employee}
-            </span>
-          </button>
-        </div>
-        <p className="muted small">
-          CEOs see all invoices, approvals, and notifications. Employees can draft invoices and view approval feedback.
-        </p>
-      </div>
-    </div>
-  )
+    return INVOICE_LEDGER
+  }, [activeView, recentInvoices])
 
   const paymentInsights = useMemo(() => {
-    const totalVolume = PAYMENT_TRANSACTIONS.filter((txn) => txn.status === 'Succeeded').reduce(
-      (sum, txn) => sum + txn.amount,
-      0,
-    )
-    const successCount = PAYMENT_TRANSACTIONS.filter((txn) => txn.status === 'Succeeded').length
+    const succeededTxns = PAYMENT_TRANSACTIONS.filter((txn) => txn.status === 'Succeeded')
+    const totalVolume = succeededTxns.reduce((sum, txn) => sum + txn.amount, 0)
+    const successCount = succeededTxns.length
     const failureCount = PAYMENT_TRANSACTIONS.filter((txn) => txn.status === 'Failed').length
     const pendingCount = PAYMENT_TRANSACTIONS.filter((txn) => txn.status === 'Pending').length
     const successRate = PAYMENT_TRANSACTIONS.length
@@ -664,7 +490,7 @@ ${ORGANIZATION.contact.phone}
         return <InvoiceBuilder editingInvoice={editingInvoice} onSave={handleInvoiceSave} />
       case 'invoices':
         return (
-          <section className="module-card">
+          <section className="module-card span-2">
             <header className="module-heading">
               <div>
                 <h2>All invoices</h2>
@@ -777,14 +603,14 @@ ${ORGANIZATION.contact.phone}
         )
       case 'payments':
         return (
-          <div className="operations-grid">
+          <div className="overview-grid">
             <section className="module-card span-2">
               <header className="module-heading">
                 <div>
                   <h2>Payment gateway control centre</h2>
                   <p>Monitor provider health, channel uptime, and reconciliation windows.</p>
                 </div>
-                <div className="gateway-actions">
+                <div className="gateway-actions" style={{ display: 'flex', gap: '0.75rem' }}>
                   <button type="button" className="outline">
                     Test webhook
                   </button>
@@ -793,22 +619,22 @@ ${ORGANIZATION.contact.phone}
                   </button>
                 </div>
               </header>
-              <div className="gateway-summary">
+              <div className="gateway-summary" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '2rem' }}>
                 <div>
-                  <span className={`gateway-status ${PAYMENT_GATEWAY.status.toLowerCase()}`}>
+                  <span className={`status-chip ${PAYMENT_GATEWAY.status.toLowerCase()}`}>
                     {PAYMENT_GATEWAY.status}
                   </span>
-                  <h3>{PAYMENT_GATEWAY.providerName}</h3>
-                  <p>Settlement window: {PAYMENT_GATEWAY.settlementWindow}</p>
+                  <h3 style={{ marginTop: '1rem', fontSize: '1.25rem' }}>{PAYMENT_GATEWAY.providerName}</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Settlement window: {PAYMENT_GATEWAY.settlementWindow}</p>
                 </div>
-                <div className="summary-grid">
+                <div className="summary-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.50rem' }}>
                   <div>
-                    <span className="label">Fee structure</span>
-                    <strong>{PAYMENT_GATEWAY.feePercentage.toFixed(1)}%</strong>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Fee structure</span>
+                    <strong style={{ display: 'block', fontSize: '1.125rem' }}>{PAYMENT_GATEWAY.feePercentage.toFixed(1)}%</strong>
                   </div>
                   <div>
-                    <span className="label">Last sync</span>
-                    <strong>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Last sync</span>
+                    <strong style={{ display: 'block', fontSize: '0.9rem' }}>
                       {new Intl.DateTimeFormat('en-IN', {
                         dateStyle: 'medium',
                         timeStyle: 'short',
@@ -816,191 +642,71 @@ ${ORGANIZATION.contact.phone}
                     </strong>
                   </div>
                   <div>
-                    <span className="label">Reconciliation</span>
-                    <strong>{PAYMENT_GATEWAY.reconciliationStatus}</strong>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Reconciliation</span>
+                    <strong style={{ display: 'block', fontSize: '1.125rem' }}>{PAYMENT_GATEWAY.reconciliationStatus}</strong>
                   </div>
                   <div>
-                    <span className="label">Merchant ID</span>
-                    <strong>{PAYMENT_GATEWAY.credentials.merchantId}</strong>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Merchant ID</span>
+                    <strong style={{ display: 'block', fontSize: '1.125rem' }}>{PAYMENT_GATEWAY.credentials.merchantId}</strong>
                   </div>
                 </div>
-                <div className="credential-card">
-                  <p>
-                    Key ending <strong>{PAYMENT_GATEWAY.credentials.keyEnding}</strong>
-                  </p>
-                  <p>{PAYMENT_GATEWAY.credentials.webhookUrl}</p>
-                </div>
               </div>
-              <div className="channel-grid">
+            </section>
+
+            <section className="module-card span-2">
+              <header className="module-heading">
+                <div>
+                  <h2>Operating Channels</h2>
+                </div>
+              </header>
+              <div className="channel-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem' }}>
                 {PAYMENT_GATEWAY.channels.map((channel: PaymentGatewayChannel) => (
-                  <article key={channel.id} className="channel-card">
-                    <header>
-                      <h4>{channel.label}</h4>
-                      <span className={`channel-status ${channel.status.toLowerCase()}`}>{channel.status}</span>
+                  <article key={channel.id} className="stat-card">
+                    <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <h4 style={{ fontWeight: 600 }}>{channel.label}</h4>
+                      <span className={`status-chip ${channel.status.toLowerCase()}`}>{channel.status}</span>
                     </header>
-                    <div className="channel-metrics">
+                    <div className="channel-metrics" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', marginTop: '1rem' }}>
                       <div>
-                        <span className="label">Success rate</span>
-                        <strong>{channel.successRate.toFixed(1)}%</strong>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Success rate</span>
+                        <strong style={{ display: 'block' }}>{channel.successRate.toFixed(1)}%</strong>
                       </div>
                       <div>
-                        <span className="label">Settlement SLA</span>
-                        <strong>{channel.slaMinutes} min</strong>
+                        <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>SLA</span>
+                        <strong style={{ display: 'block' }}>{channel.slaMinutes}m</strong>
                       </div>
                     </div>
                   </article>
                 ))}
-              </div>
-            </section>
-
-            <section className="module-card">
-              <header className="module-heading">
-                <div>
-                  <h2>Recent payment activity</h2>
-                  <p>Authorised captures and settlements across invoices.</p>
-                </div>
-              </header>
-              <div className="transaction-list">
-                {paymentInsights.recentTransactions.map((txn: PaymentTransaction) => {
-                  const client = CLIENT_DIRECTORY.find((c) => c.id === txn.clientId)
-                  const statusClass = txn.status.toLowerCase()
-                  return (
-                    <div key={txn.id} className="transaction-row">
-                      <div>
-                        <h4>{txn.reference}</h4>
-                        <span className="txn-meta">
-                          Invoice {txn.invoiceId.toUpperCase()} • {client?.companyName ?? '—'}
-                        </span>
-                      </div>
-                      <div className="txn-amount">
-                        <strong>
-                          {new Intl.NumberFormat('en-IN', {
-                            style: 'currency',
-                            currency: txn.currency,
-                            maximumFractionDigits: 0,
-                          }).format(txn.amount)}
-                        </strong>
-                        <small>
-                          Fee {new Intl.NumberFormat('en-IN', { style: 'currency', currency: txn.currency }).format(txn.feeAmount)}
-                        </small>
-                      </div>
-                      <div className="txn-status-block">
-                        <span className={`txn-status ${statusClass}`}>{txn.status}</span>
-                        <span className="txn-meta">
-                          {new Intl.DateTimeFormat('en-IN', {
-                            dateStyle: 'medium',
-                            timeStyle: 'short',
-                          }).format(new Date(txn.receivedAt))}
-                        </span>
-                      </div>
-                    </div>
-                  )
-                })}
               </div>
             </section>
           </div>
         )
       case 'clients':
         return (
-          <div className="operations-grid">
+          <div className="overview-grid">
             <section className="module-card span-2">
               <header className="module-heading">
                 <div>
                   <h2>Client portfolio</h2>
                   <p>Profiles of key retainers with contact and contract visibility.</p>
                 </div>
-                <button type="button" className="outline" onClick={() => setActiveView('builder')}>
+                <button type="button" className="primary" onClick={() => setActiveView('builder')}>
                   Draft invoice
                 </button>
               </header>
-              <div className="client-grid">
+              <div className="client-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.5rem' }}>
                 {CLIENT_DIRECTORY.map((client) => (
-                  <article key={client.id} className="client-card">
+                  <article key={client.id} className="stat-card">
                     <header>
-                      <h3>{client.companyName}</h3>
-                      <span>{client.contactName}</span>
+                      <h3 style={{ fontSize: '1.125rem', fontWeight: 600 }}>{client.companyName}</h3>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>{client.contactName}</span>
                     </header>
-                    <p className="client-meta">{client.email}</p>
-                    <p className="client-meta">{client.phone}</p>
-                    <p className="client-meta">
-                      {[client.city, client.state].filter(Boolean).join(', ')} • {client.country}
-                    </p>
-                    {client.gstin ? <span className="chip">GSTIN: {client.gstin}</span> : null}
+                    <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>{client.email}</p>
+                    <p style={{ fontSize: '0.875rem' }}>{client.phone}</p>
+                    {client.gstin ? <span className="status-chip draft" style={{ marginTop: '0.75rem' }}>GSTIN: {client.gstin}</span> : null}
                   </article>
                 ))}
-              </div>
-            </section>
-          </div>
-        )
-      case 'team':
-        return (
-          <div className="operations-grid">
-            <section className="module-card">
-              <header className="module-heading">
-                <div>
-                  <h2>Finance squad roster</h2>
-                  <p>Billing, collections, and delivery partners with current focus areas.</p>
-                </div>
-              </header>
-              <div className="team-grid detailed">
-                {TEAM_MEMBERS.map((member) => (
-                  <article key={member.id} className="team-card focus">
-                    <div className="avatar" style={{ backgroundColor: member.avatarColor }}>
-                      {member.initials}
-                    </div>
-                    <div className="team-details">
-                      <h3>{member.name}</h3>
-                      <span>{member.role}</span>
-                      <p>{member.email}</p>
-                      <div className="chip-row">
-                        <span className="chip">Collections</span>
-                        <span className="chip">Q2 OKRs</span>
-                      </div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-          </div>
-        )
-      case 'settings':
-        return (
-          <div className="operations-grid">
-            <section className="module-card">
-              <header className="module-heading">
-                <div>
-                  <h2>Billing console settings</h2>
-                  <p>Control payment preferences, reminders, and notification policies.</p>
-                </div>
-              </header>
-              <div className="settings-panel">
-                <div className="settings-row">
-                  <div>
-                    <h3>Auto reminder cadence</h3>
-                    <p>Send pending invoice nudges every 5 days until payment is confirmed.</p>
-                  </div>
-                  <button type="button" className="toggle on">
-                    Enabled
-                  </button>
-                </div>
-                <div className="settings-row">
-                  <div>
-                    <h3>Attach PDF to emails</h3>
-                    <p>Automatically generate and attach branded PDFs for every invoice dispatch.</p>
-                  </div>
-                  <button type="button" className="toggle">
-                    Disabled
-                  </button>
-                </div>
-                <div className="settings-row">
-                  <div>
-                    <h3>Dual approval workflow</h3>
-                    <p>Route invoices above ₹2,00,000 for finance head approval before release.</p>
-                  </div>
-                  <button type="button" className="toggle on">
-                    Enabled
-                  </button>
-                </div>
               </div>
             </section>
           </div>
@@ -1020,81 +726,52 @@ ${ORGANIZATION.contact.phone}
               </header>
               <div className="stat-grid">
                 <div className="stat-card primary">
-                  <span className="label">Outstanding receivables</span>
+                  <span className="label">Receivables</span>
                   <strong>
-                    {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(
+                    {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(
                       overviewStats.totals.outstanding,
                     )}
                   </strong>
-                  <p>Includes pending and overdue invoices awaiting collection.</p>
                 </div>
                 <div className="stat-card">
-                  <span className="label">Draft</span>
-                  <strong>{overviewStats.totals.Draft.toLocaleString('en-IN')}</strong>
-                  <p>Value of invoices saved but not shared with clients.</p>
-                </div>
-                <div className="stat-card">
-                  <span className="label">Pending approval</span>
-                  <strong>{overviewStats.totals.Pending.toLocaleString('en-IN')}</strong>
-                  <p>Invoiced amounts awaiting client confirmation.</p>
+                  <span className="label">Awaiting Approval</span>
+                  <strong>{overviewStats.totals['Awaiting Approval'].toLocaleString('en-IN')}</strong>
                 </div>
                 <div className="stat-card">
                   <span className="label">Collected</span>
                   <strong>{overviewStats.totals.Paid.toLocaleString('en-IN')}</strong>
-                  <p>Confirmed payments received this quarter.</p>
                 </div>
                 <div className="stat-card warning">
                   <span className="label">Overdue</span>
                   <strong>{overviewStats.totals.Overdue.toLocaleString('en-IN')}</strong>
-                  <p>Requires immediate follow-up from collections team.</p>
                 </div>
               </div>
             </section>
 
-            <section className="module-card">
+            <section className="module-card" style={{ gridColumn: 'span 8' }}>
               <header className="module-heading">
-                <div>
-                  <h2>Recent invoices</h2>
-                  <p>Latest invoices sent to strategic accounts.</p>
-                </div>
+                <h2>Recent activity</h2>
               </header>
-              <div className="invoice-list">
+              <div className="invoice-table">
                 {recentInvoices.map((invoice) => {
                   const client = CLIENT_DIRECTORY.find((c) => c.id === invoice.clientId)
                   return (
-                    <article key={invoice.id} className="invoice-card">
-                      <header>
-                        <div>
-                          <h3>{invoice.invoiceNumber}</h3>
-                          <span>{client?.companyName ?? '—'}</span>
-                        </div>
-                        {renderStatusChip(invoice.status)}
-                      </header>
-                      <p>{invoice.engagement}</p>
-                      <footer>
-                        <span>
-                          Issued {new Intl.DateTimeFormat('en-IN', { dateStyle: 'medium' }).format(new Date(invoice.issueDate))}
-                        </span>
-                        <strong>
-                          {new Intl.NumberFormat('en-IN', {
-                            style: 'currency',
-                            currency: invoice.currency,
-                            maximumFractionDigits: 0,
-                          }).format(invoice.amount)}
-                        </strong>
-                      </footer>
-                    </article>
+                    <div key={invoice.id} className="table-row invoice" style={{ gridTemplateColumns: '1fr 1.5fr 1fr 1fr' }}>
+                      <span><strong>{invoice.invoiceNumber}</strong></span>
+                      <span>{client?.companyName}</span>
+                      <span>{renderStatusChip(invoice.status)}</span>
+                      <span style={{ textAlign: 'right', fontWeight: 600 }}>
+                        {new Intl.NumberFormat('en-IN', { style: 'currency', currency: invoice.currency, maximumFractionDigits: 0 }).format(invoice.amount)}
+                      </span>
+                    </div>
                   )
                 })}
               </div>
             </section>
 
-            <section className="module-card">
+            <section className="module-card" style={{ gridColumn: 'span 4' }}>
               <header className="module-heading">
-                <div>
-                  <h2>Operational updates</h2>
-                  <p>Key actions from finance, delivery, and collections.</p>
-                </div>
+                <h2>Updates</h2>
               </header>
               <div className="activity-feed">
                 {ACTIVITY_LOG.map((activity) => (
@@ -1115,124 +792,6 @@ ${ORGANIZATION.contact.phone}
                 ))}
               </div>
             </section>
-
-            <section className="module-card span-2">
-              <header className="module-heading">
-                <div>
-                  <h2>Service catalogue</h2>
-                  <p>Standard billing packages across our practice areas.</p>
-                </div>
-              </header>
-              <div className="service-grid">
-                {SERVICE_CATALOG.map((service) => (
-                  <article key={service.id} className="service-card">
-                    <header>
-                      <h3>{service.name}</h3>
-                      <span className="service-category">{service.category}</span>
-                    </header>
-                    <p>{service.description}</p>
-                    <footer>
-                      <span>{service.unit}</span>
-                      <strong>
-                        {new Intl.NumberFormat('en-IN', {
-                          style: 'currency',
-                          currency: 'INR',
-                          maximumFractionDigits: 0,
-                        }).format(service.unitRate)}
-                      </strong>
-                    </footer>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            <section className="module-card span-2">
-              <header className="module-heading">
-                <div>
-                  <h2>Service spotlight</h2>
-                  <p>Positioning decks and delivery promises for high-value programs.</p>
-                </div>
-              </header>
-              <div className="service-showcase-grid">
-                {SERVICE_SHOWCASES.map((item: ServiceShowcase) => (
-                  <article key={item.id} className="service-showcase-card">
-                    <header>
-                      <h3>{item.headline}</h3>
-                      <span>{item.persona}</span>
-                    </header>
-                    <p>{item.summary}</p>
-                    <ul>
-                      {item.deliverables.map((deliverable) => (
-                        <li key={deliverable}>{deliverable}</li>
-                      ))}
-                    </ul>
-                    <footer>
-                      <span>{item.projectedTimeline}</span>
-                      <button type="button" className="outline" onClick={() => handleViewProposal(item)}>
-                        View proposal
-                      </button>
-                    </footer>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            <section className="module-card">
-              <header className="module-heading">
-                <div>
-                  <h2>Gateway performance snapshot</h2>
-                  <p>Payments processed through {PAYMENT_GATEWAY.providerName}.</p>
-                </div>
-                <button type="button" className="outline" onClick={() => setActiveView('payments')}>
-                  Manage payments
-                </button>
-              </header>
-              <div className="payment-metrics">
-                <div>
-                  <span className="label">Success rate</span>
-                  <strong>{paymentInsights.successRate.toFixed(1)}%</strong>
-                </div>
-                <div>
-                  <span className="label">Total volume</span>
-                  <strong>
-                    {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(
-                      paymentInsights.totalVolume,
-                    )}
-                  </strong>
-                </div>
-                <div>
-                  <span className="label">Pending captures</span>
-                  <strong>{paymentInsights.pendingCount}</strong>
-                </div>
-                <div>
-                  <span className="label">Failed attempts</span>
-                  <strong>{paymentInsights.failureCount}</strong>
-                </div>
-              </div>
-            </section>
-
-            <section className="module-card">
-              <header className="module-heading">
-                <div>
-                  <h2>Finance squad</h2>
-                  <p>Specialists coordinating billing, strategy, and delivery.</p>
-                </div>
-              </header>
-              <div className="team-grid">
-                {TEAM_MEMBERS.map((member) => (
-                  <article key={member.id} className="team-card">
-                    <div className="avatar" style={{ backgroundColor: member.avatarColor }}>
-                      {member.initials}
-                    </div>
-                    <div className="team-details">
-                      <h3>{member.name}</h3>
-                      <span>{member.role}</span>
-                      <p>{member.email}</p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
           </div>
         )
     }
@@ -1244,16 +803,49 @@ ${ORGANIZATION.contact.phone}
 
   return (
     <div className="app-shell">
-      <aside className="sidebar">
+      {isMobileView && (
+        <button 
+          className="mobile-menu-btn" 
+          onClick={toggleMobileMenu}
+          aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={isMobileMenuOpen}
+        >
+          {isMobileMenuOpen ? (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          ) : (
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 12H21M3 6H21M3 18H21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          )}
+        </button>
+      )}
+      
+      {isMobileView && isMobileMenuOpen && (
+        <div 
+          className="sidebar-overlay active" 
+          onClick={toggleMobileMenu}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Escape' && toggleMobileMenu()}
+          aria-label="Close menu"
+        />
+      )}
+      
+      <aside 
+        className={`sidebar ${isMobileMenuOpen ? 'active' : ''}`}
+        aria-hidden={!isMobileMenuOpen && isMobileView}
+      >
         <div className="brand">
           <span className="glyph">A</span>
           <div>
-            <p className="muted">Aurora Digital Solutions</p>
+            <p>Aurora Digital</p>
             <strong>Billing Desk</strong>
           </div>
         </div>
         <nav className="nav-group">
-          <p className="nav-label">Overview</p>
+          <p className="nav-label">Management</p>
           <button
             type="button"
             className={activeView === 'dashboard' ? 'active' : ''}
@@ -1267,59 +859,38 @@ ${ORGANIZATION.contact.phone}
             className={activeView === 'overview' ? 'active' : ''}
             onClick={() => setActiveView('overview')}
           >
-            <span className="nav-icon">📊</span>
-            Executive summary
+            Dashboard
           </button>
           <button
             type="button"
             className={activeView === 'invoices' ? 'active' : ''}
             onClick={() => setActiveView('invoices')}
           >
-            <span className="nav-icon">📄</span>
-            Invoice ledger
+            Invoices
           </button>
           <button
             type="button"
             className={activeView === 'builder' ? 'active' : ''}
             onClick={() => setActiveView('builder')}
           >
-            <span className="nav-icon">➕</span>
-            Create invoice
+            Create New
           </button>
         </nav>
         <nav className="nav-group">
-          <p className="nav-label">Operations</p>
+          <p className="nav-label">Settings</p>
           <button
             type="button"
             className={activeView === 'clients' ? 'active' : ''}
             onClick={() => setActiveView('clients')}
           >
-            <span className="nav-icon">👥</span>
-            Client profiles
-          </button>
-          <button
-            type="button"
-            className={activeView === 'team' ? 'active' : ''}
-            onClick={() => setActiveView('team')}
-          >
-            <span className="nav-icon">👔</span>
-            Team workload
-          </button>
-          <button
-            type="button"
-            className={activeView === 'settings' ? 'active' : ''}
-            onClick={() => setActiveView('settings')}
-          >
-            <span className="nav-icon">⚙️</span>
-            Settings
+            Clients
           </button>
           <button
             type="button"
             className={activeView === 'payments' ? 'active' : ''}
             onClick={() => setActiveView('payments')}
           >
-            <span className="nav-icon">💳</span>
-            Payment gateway
+            Payments
           </button>
           <button
             type="button"
@@ -1330,26 +901,22 @@ ${ORGANIZATION.contact.phone}
             Notifications {unreadCount ? <span className="badge">{unreadCount}</span> : null}
           </button>
         </nav>
-        <footer className="sidebar-footer">
-          <p>{ORGANIZATION.contact.email}</p>
-          <span>{ORGANIZATION.contact.phone}</span>
+        <footer className="nav-group" style={{ marginTop: 'auto' }}>
+          <div style={{ padding: '0 0.75rem', fontSize: '0.75rem', color: 'var(--slate-500)' }}>
+            <p>{ORGANIZATION.contact.email}</p>
+          </div>
         </footer>
       </aside>
 
       <div className="app-main">
         <header className="app-header">
           <div>
-            <p className="muted">Welcome back, {displayName || 'Finance Team'}</p>
-            <h1>{activeView === 'builder' ? 'Generate invoice' : 'Invoice & Billing Command Centre'}</h1>
+            <span className="muted">Welcome back, Finance</span>
+            <h1>{activeView.charAt(0).toUpperCase() + activeView.slice(1)}</h1>
           </div>
-          <div className="header-actions">
-            <button type="button" className="outline" onClick={() => setActiveView('builder')}>
-              + New invoice
-            </button>
-            <button type="button" className="ghost" onClick={handleLogout}>
-              Log out
-            </button>
-          </div>
+          <button type="button" className="primary" onClick={() => setActiveView('builder')}>
+            + Generate Invoice
+          </button>
         </header>
         <div className="content-area">{renderContent()}</div>
       </div>
