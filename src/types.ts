@@ -82,6 +82,8 @@ export interface InvoiceFormState {
   recurring: RecurringConfig
   terms: string
   additionalNote: string
+  notes?: string
+  status?: InvoiceStatus
 }
 
 export type InvoiceStatus = 'Draft' | 'Pending' | 'Awaiting Approval' | 'Approved' | 'Sent' | 'Paid' | 'Overdue' | 'Void'
@@ -107,6 +109,8 @@ export interface InvoiceWorkflowRecord extends InvoiceRecord {
   approvalStatus: ApprovalStatus
   createdBy: 'employee' | 'ceo'
   clientViewUrl?: string
+  lineItems?: LineItem[]
+  notes?: string
 }
 
 export interface NotificationMessage {

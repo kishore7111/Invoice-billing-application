@@ -6,6 +6,7 @@ import type {
   ClientProfile,
   Currency,
   InvoiceFormState,
+  InvoiceWorkflowRecord,
   LineItem,
   Service,
   StoredInvoice,
@@ -90,9 +91,33 @@ const createLineItem = (service?: Service): LineItem => ({
   notes: '',
 })
 
-const createInitialState = (): InvoiceFormState => {
+const createInitialState = (editingInvoice?: InvoiceWorkflowRecord): InvoiceFormState => {
   const today = new Date()
   const defaultClient = CLIENT_DIRECTORY[0]
+
+  if (editingInvoice) {
+    const client = CLIENT_DIRECTORY.find((c) => c.id === editingInvoice.clientId)
+    return {
+      clientSelectionId: editingInvoice.clientId,
+      client: client ? toClientDetails(client) : { ...emptyClientDetails },
+      currency: editingInvoice.currency,
+      taxRate: 18,
+      lineItems: editingInvoice?.lineItems?.map((item: any) => ({ ...item, id: generateId() })) || [],
+      meta: {
+        invoiceNumber: `${editingInvoice.invoiceNumber}-EDIT-${generateId()}`,
+        issueDate: editingInvoice.issueDate,
+        dueDate: editingInvoice.dueDate,
+        projectName: editingInvoice.engagement,
+        purchaseOrder: '',
+        reference: '',
+      },
+      terms: 'Payment due within 15 days of invoice date. Late payments subject to 1.5% monthly interest.',
+      additionalNote: '',
+      notes: editingInvoice.notes || '',
+      status: 'Draft',
+    }
+  }
+
   return {
     clientSelectionId: defaultClient?.id ?? '',
     client: defaultClient ? toClientDetails(defaultClient) : { ...emptyClientDetails },
@@ -112,6 +137,8 @@ const createInitialState = (): InvoiceFormState => {
     terms:
       'Payment due within 15 days from the invoice date. Please remit via bank transfer to the account listed. Late payments accrue a 2% monthly finance charge.',
     additionalNote: '',
+    notes: '',
+    status: 'Draft',
   }
 }
 
@@ -120,9 +147,15 @@ const serviceLookup = SERVICE_CATALOG.reduce<Record<string, Service>>((acc, serv
   return acc
 }, {})
 
-export const InvoiceBuilder = () => {
-  const [formState, setFormState] = useState<InvoiceFormState>(() => createInitialState())
-  const [layoutMode, setLayoutMode] = useState<'split' | 'form' | 'preview'>('form')
+export const InvoiceBuilder = ({ 
+  editingInvoice, 
+  onSave 
+}: { 
+  editingInvoice?: InvoiceWorkflowRecord | null
+  onSave?: (invoiceData: InvoiceFormState) => void 
+}) => {
+  const [formState, setFormState] = useState<InvoiceFormState>(() => createInitialState(editingInvoice || undefined))
+  const [layoutMode, setLayoutMode] = useState<'form' | 'preview'>('form')
   const [savedInvoices, setSavedInvoices] = useState<StoredInvoice[]>(() => {
     const stored = safeJsonParse<StoredInvoice[]>(
       typeof window === 'undefined' ? null : window.localStorage.getItem(INVOICE_ARCHIVE_STORAGE_KEY),
@@ -142,29 +175,9 @@ export const InvoiceBuilder = () => {
   const acceptedChannelSummary = useMemo(() => gatewayChannels.map((channel) => channel.label).join(' • '), [gatewayChannels])
 
   useEffect(() => {
-    if (typeof window === 'undefined' || !window.matchMedia) {
-      setLayoutMode('split')
+    if (typeof window === 'undefined') {
       return
     }
-
-    const mediaQuery = window.matchMedia('(min-width: 1280px)')
-
-    const applyLayout = (matches: boolean) => {
-      if (hasUserSelectedLayout.current) {
-        return
-      }
-      setLayoutMode(matches ? 'split' : 'form')
-    }
-
-    applyLayout(mediaQuery.matches)
-
-    const listener = (event: MediaQueryListEvent) => {
-      applyLayout(event.matches)
-    }
-
-    mediaQuery.addEventListener('change', listener)
-
-    return () => mediaQuery.removeEventListener('change', listener)
   }, [])
 
   useEffect(() => {
@@ -378,6 +391,10 @@ export const InvoiceBuilder = () => {
     }
     setSavedInvoices((prev) => [invoice, ...prev])
     setSelectedSavedInvoiceId(invoice.id)
+    
+    if (onSave) {
+      onSave(formState)
+    }
   }
 
   const handleUpdateSavedInvoiceCopy = () => {
@@ -508,7 +525,7 @@ export const InvoiceBuilder = () => {
     setDraftPayload(null)
   }
 
-  const handleLayoutModeChange = (mode: 'split' | 'form' | 'preview') => {
+  const handleLayoutModeChange = (mode: 'form' | 'preview') => {
     hasUserSelectedLayout.current = true
     setLayoutMode(mode)
     if (mode === 'preview') {
@@ -611,21 +628,14 @@ export const InvoiceBuilder = () => {
             className={layoutMode === 'form' ? 'active' : ''}
             onClick={() => handleLayoutModeChange('form')}
           >
-            Form only
-          </button>
-          <button
-            type="button"
-            className={layoutMode === 'split' ? 'active' : ''}
-            onClick={() => handleLayoutModeChange('split')}
-          >
-            Split view
+            Form view
           </button>
           <button
             type="button"
             className={layoutMode === 'preview' ? 'active' : ''}
             onClick={() => handleLayoutModeChange('preview')}
           >
-            Preview only
+            Preview
           </button>
         </div>
       </div>

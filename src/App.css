@@ -369,10 +369,6 @@ button.outline:hover {
   align-items: start;
 }
 
-.invoice-builder .workspace.layout-split {
-  grid-template-columns: minmax(0, 1.08fr) minmax(0, 1fr);
-}
-
 .invoice-builder .workspace.layout-form,
 .invoice-builder .workspace.layout-preview {
   grid-template-columns: minmax(0, 1fr);

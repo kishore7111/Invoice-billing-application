@@ -9,7 +9,6 @@ import {
   PAYMENT_TRANSACTIONS,
 } from './data'
 import type {
-  ActivityLog,
   InvoiceRecord,
   InvoiceWorkflowRecord,
   InvoiceStatus,
@@ -21,6 +20,7 @@ import { InvoiceBuilder } from './components/InvoiceBuilder'
 type AppView =
   | 'login'
   | 'overview'
+  | 'dashboard'
   | 'invoices'
   | 'builder'
   | 'clients'
@@ -28,6 +28,7 @@ type AppView =
   | 'settings'
   | 'payments'
   | 'notifications'
+  | 'proposal-detail'
 
 const statusTone: Record<InvoiceStatus, string> = {
   Draft: 'draft',
@@ -154,69 +155,339 @@ function App() {
     return { totalVolume, successRate, failureCount, pendingCount, recentTransactions }
   }, [])
 
+  // Dashboard data calculations
+  const dashboardRecentInvoices = useMemo(
+    () =>
+      [...workflowLedger]
+        .sort((a, b) => new Date(b.issueDate).getTime() - new Date(a.issueDate).getTime())
+        .slice(0, 6),
+    [workflowLedger],
+  )
+
+  const dashboardPendingInvoices = useMemo(() => 
+    workflowLedger.filter(inv => inv.approvalStatus === 'AwaitingApproval'), 
+    [workflowLedger]
+  )
+
+  const dashboardApprovedInvoices = useMemo(() => 
+    workflowLedger.filter(inv => inv.approvalStatus === 'Approved'), 
+    [workflowLedger]
+  )
+
+  const dashboardTotalRevenue = useMemo(() => 
+    dashboardApprovedInvoices.reduce((sum, inv) => sum + inv.amount, 0), 
+    [dashboardApprovedInvoices]
+  )
+
   const renderStatusChip = (status: InvoiceStatus) => (
     <span className={`status-chip ${statusTone[status]}`}>{status}</span>
   )
 
-  const renderActivity = (activity: ActivityLog) => (
-    <div key={activity.id} className="activity-row">
-      <div>
-        <p className="activity-label">{activity.summary}</p>
-        <span className="activity-meta">
-          {new Intl.DateTimeFormat('en-IN', {
-            dateStyle: 'medium',
-            timeStyle: 'short',
-          }).format(new Date(activity.timestamp))}
-          {' • '}
-          {activity.actor}
-        </span>
+  const renderDashboard = () => {
+
+    return (
+      <div className="visual-dashboard">
+        <div className="dashboard-header">
+          <div className="dashboard-title">
+            <h1>Visual Dashboard</h1>
+            <p>Real-time insights and analytics for your billing operations</p>
+          </div>
+          <div className="dashboard-stats">
+            <div className="stat-circle">
+              <div className="circle-progress" style={{ 
+                background: `conic-gradient(#10b981 0deg ${(dashboardApprovedInvoices.length / workflowLedger.length) * 360}deg, #e5e7eb 0deg)` 
+              }}>
+                <div className="circle-inner">
+                  <strong>{dashboardApprovedInvoices.length}</strong>
+                  <span>Approved</span>
+                </div>
+              </div>
+            </div>
+            <div className="stat-circle">
+              <div className="circle-progress" style={{ 
+                background: `conic-gradient(#f59e0b 0deg ${(dashboardPendingInvoices.length / workflowLedger.length) * 360}deg, #e5e7eb 0deg)` 
+              }}>
+                <div className="circle-inner">
+                  <strong>{dashboardPendingInvoices.length}</strong>
+                  <span>Pending</span>
+                </div>
+              </div>
+            </div>
+            <div className="revenue-card">
+              <div className="revenue-icon">💰</div>
+              <div className="revenue-details">
+                <strong>
+                  {new Intl.NumberFormat('en-IN', {
+                    style: 'currency',
+                    currency: 'INR',
+                    maximumFractionDigits: 0,
+                  }).format(dashboardTotalRevenue)}
+                </strong>
+                <span>Total Revenue</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="dashboard-grid">
+          <section className="dashboard-card chart-card">
+            <header>
+              <h2>Invoice Status Overview</h2>
+              <p>Distribution of invoice statuses</p>
+            </header>
+            <div className="chart-container">
+              <div className="bar-chart">
+                {['AwaitingApproval', 'Approved', 'Rejected', 'NeedsEdits'].map((status) => {
+                  const count = workflowLedger.filter(inv => inv.approvalStatus === status).length
+                  const percentage = (count / workflowLedger.length) * 100
+                  return (
+                    <div key={status} className="bar-item">
+                      <div className="bar-label">{status.replace(/([A-Z])/g, ' $1').trim()}</div>
+                      <div className="bar-wrapper">
+                        <div className="bar-fill" style={{ 
+                          width: `${percentage}%`,
+                          background: status === 'Approved' ? '#10b981' : 
+                                     status === 'AwaitingApproval' ? '#f59e0b' :
+                                     status === 'Rejected' ? '#ef4444' : '#8b5cf6'
+                        }}></div>
+                      </div>
+                      <span className="bar-value">{count}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </section>
+
+          <section className="dashboard-card recent-activity">
+            <header>
+              <h2>Recent Activity</h2>
+              <p>Latest invoice updates and actions</p>
+            </header>
+            <div className="activity-timeline">
+              {dashboardRecentInvoices.slice(0, 4).map((invoice) => (
+                <div key={invoice.id} className="timeline-item">
+                  <div className={`timeline-dot ${invoice.approvalStatus.toLowerCase()}`}></div>
+                  <div className="timeline-content">
+                    <div className="timeline-header">
+                      <strong>{invoice.invoiceNumber}</strong>
+                      <span className="timeline-time">
+                        {new Intl.DateTimeFormat('en-IN', { 
+                          dateStyle: 'short', 
+                          timeStyle: 'short' 
+                        }).format(new Date(invoice.lastUpdated))}
+                      </span>
+                    </div>
+                    <p className="timeline-client">{invoice.engagement}</p>
+                    <div className="timeline-amount">
+                      {new Intl.NumberFormat('en-IN', {
+                        style: 'currency',
+                        currency: invoice.currency,
+                        maximumFractionDigits: 0,
+                      }).format(invoice.amount)}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section className="dashboard-card metrics-card">
+            <header>
+              <h2>Key Metrics</h2>
+              <p>Performance indicators</p>
+            </header>
+            <div className="metrics-grid">
+              <div className="metric-item">
+                <div className="metric-icon">📈</div>
+                <div className="metric-details">
+                  <strong>{workflowLedger.length}</strong>
+                  <span>Total Invoices</span>
+                </div>
+              </div>
+              <div className="metric-item">
+                <div className="metric-icon">⚡</div>
+                <div className="metric-details">
+                  <strong>{Math.round((dashboardApprovedInvoices.length / workflowLedger.length) * 100)}%</strong>
+                  <span>Approval Rate</span>
+                </div>
+              </div>
+              <div className="metric-item">
+                <div className="metric-icon">⏱️</div>
+                <div className="metric-details">
+                  <strong>
+                    {workflowLedger.length > 0 
+                      ? Math.round(workflowLedger.reduce((sum, inv) => {
+                          const days = Math.ceil((new Date().getTime() - new Date(inv.issueDate).getTime()) / (1000 * 60 * 60 * 24))
+                          return sum + days
+                        }, 0) / workflowLedger.length)
+                      : 0
+                    } days
+                  </strong>
+                  <span>Avg Processing Time</span>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
-      <span className={`activity-type ${activity.activityType}`}>{activity.activityType}</span>
-    </div>
-  )
+    )
+  }
+    const renderNotifications = () => {
+    const roleNotifications = notifications.filter((note) => note.recipientRole === role)
+    const unreadNotifications = roleNotifications.filter((note) => note.status === 'unread')
+    
+    return (
+      <section className="module-card">
+        <header className="module-heading">
+          <div>
+            <h2>Notifications</h2>
+            <p>{unreadNotifications.length} unread messages</p>
+          </div>
+          {unreadNotifications.length > 0 && (
+            <button 
+              type="button" 
+              className="outline" 
+              onClick={() => {
+                setNotifications(prev => 
+                  prev.map(n => 
+                    n.recipientRole === role && n.status === 'unread' 
+                      ? { ...n, status: 'read' } 
+                      : n
+                  )
+                )
+              }}
+            >
+              Mark all as read
+            </button>
+          )}
+        </header>
+        <div className="notification-list enhanced">
+          {roleNotifications.length === 0 ? (
+            <div className="empty-state">
+              <span className="empty-icon">📭</span>
+              <p>No notifications</p>
+              <span className="empty-text">You're all caught up!</span>
+            </div>
+          ) : (
+            roleNotifications.map((note) => (
+              <article key={note.id} className={`notification-card enhanced ${note.status}`}>
+                <header>
+                  <div className="notification-meta">
+                    <span className="notification-time">
+                      {new Intl.DateTimeFormat('en-IN', {
+                        dateStyle: 'short',
+                        timeStyle: 'short',
+                      }).format(new Date(note.timestamp))}
+                    </span>
+                    {note.actionRequired && <span className="chip urgent">Action Required</span>}
+                    {note.status === 'unread' && <span className="chip new">New</span>}
+                  </div>
+                  {note.status === 'unread' && (
+                    <button
+                      type="button"
+                      className="ghost small"
+                      onClick={() =>
+                        setNotifications((prev) =>
+                          prev.map((n) => (n.id === note.id ? { ...n, status: 'read' } : n)),
+                        )
+                      }
+                    >
+                      Mark as read
+                    </button>
+                  )}
+                </header>
+                <div className="notification-content">
+                  <p>{note.message}</p>
+                  {note.relatedInvoiceId && (
+                    <div className="notification-actions">
+                      <button 
+                        type="button" 
+                        className="outline small"
+                        onClick={() => {
+                          setActiveView('invoices')
+                          setNotifications(prev => 
+                            prev.map(n => n.id === note.id ? { ...n, status: 'read' } : n)
+                          )
+                        }}
+                      >
+                        View Invoice
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </article>
+            ))
+          )}
+        </div>
+      </section>
+    )
+  }
 
   const renderContent = () => {
     switch (activeView) {
-      case 'notifications':
+      case 'login':
+        return (
+          <div className="login-container">
+            <div className="login-card">
+              <header className="login-header">
+                <h1>Invoice Billing System</h1>
+                <p>Select your role to continue</p>
+              </header>
+              <div className="login-options">
+                <button type="button" className="primary" onClick={() => handleLogin('ceo')}>
+                  Login as CEO
+                </button>
+                <button type="button" className="outline" onClick={() => handleLogin('employee')}>
+                  Login as Employee
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      case 'dashboard':
+        return renderDashboard()
+      case 'proposal-detail':
         return (
           <section className="module-card">
             <header className="module-heading">
               <div>
-                <h2>Notifications</h2>
-                <p>Approval requests and status updates.</p>
+                <h2>Service Proposal</h2>
+                <p>Detailed scope and deliverables for this program.</p>
               </div>
+              <button type="button" className="outline" onClick={() => setActiveView('overview')}>
+                Back to overview
+              </button>
             </header>
-            <div className="notification-list">
-              {notifications
-                .filter((note) => note.recipientRole === role)
-                .map((note) => (
-                  <article key={note.id} className={`notification-card ${note.status}`}>
-                    <header>
-                      <span>{new Date(note.timestamp).toLocaleString('en-IN')}</span>
-                      {note.actionRequired ? <span className="chip warning">Action needed</span> : null}
-                    </header>
-                    <p>{note.message}</p>
-                    {note.relatedInvoiceId ? <small>Invoice: {note.relatedInvoiceId.toUpperCase()}</small> : null}
-                    {note.status === 'unread' ? (
-                      <button
-                        type="button"
-                        className="ghost"
-                        onClick={() =>
-                          setNotifications((prev) =>
-                            prev.map((n) => (n.id === note.id ? { ...n, status: 'read' } : n)),
-                          )
-                        }
-                      >
-                        Mark as read
-                      </button>
-                    ) : null}
-                  </article>
-                ))}
-            </div>
+            {selectedProposal && (
+              <article className="proposal-detail">
+                <header>
+                  <h3>{selectedProposal.headline}</h3>
+                  <span className="proposal-persona">{selectedProposal.persona}</span>
+                </header>
+                <p className="proposal-summary">{selectedProposal.summary}</p>
+                <div className="proposal-deliverables">
+                  <h4>Key Deliverables</h4>
+                  <ul>
+                    {selectedProposal.deliverables.map((deliverable) => (
+                      <li key={deliverable}>{deliverable}</li>
+                    ))}
+                  </ul>
+                </div>
+                <footer className="proposal-footer">
+                  <span className="proposal-timeline">{selectedProposal.projectedTimeline}</span>
+                  <button type="button" className="primary" onClick={handleCreateInvoice}>
+                    Create invoice from this proposal
+                  </button>
+                </footer>
+              </article>
+            )}
           </section>
         )
+      case 'notifications':
+        return renderNotifications()
       case 'builder':
-        return <InvoiceBuilder />
+        return <InvoiceBuilder editingInvoice={editingInvoice} onSave={handleInvoiceSave} />
       case 'invoices':
         return (
           <section className="module-card span-2">
@@ -225,7 +496,7 @@ function App() {
                 <h2>All invoices</h2>
                 <p>Monitor billing progress across engagements and status buckets.</p>
               </div>
-              <button type="button" className="primary" onClick={() => setActiveView('builder')}>
+              <button type="button" className="primary" onClick={handleCreateInvoice}>
                 Create invoice
               </button>
             </header>
@@ -259,21 +530,63 @@ function App() {
                       {invoice.approvalStatus.replace(/([A-Z])/g, ' $1')}
                     </span>
                     <span className="actions-cell">
-                      {canApprove ? (
-                        <div className="action-stack">
-                          <button type="button" className="ghost" onClick={() => handleApprovalUpdate(invoice.id, 'Approved')}>
-                            Approve
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        {canApprove ? (
+                          <div className="action-stack">
+                            <button type="button" className="ghost" onClick={() => handleApprovalUpdate(invoice.id, 'Approved')}>
+                              Approve
+                            </button>
+                            <button type="button" className="ghost" onClick={() => handleApprovalUpdate(invoice.id, 'NeedsEdits')}>
+                              Request edits
+                            </button>
+                            <button type="button" className="ghost danger" onClick={() => handleApprovalUpdate(invoice.id, 'Rejected')}>
+                              Reject
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="muted" style={{ minWidth: '24px' }}>—</span>
+                        )}
+                        
+                        <div className="action-buttons">
+                          <button
+                            className="action-button view"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewInvoice(invoice);
+                            }}
+                            title="View Invoice"
+                            aria-label="View invoice details"
+                          >
+                            <ViewIcon />
                           </button>
-                          <button type="button" className="ghost" onClick={() => handleApprovalUpdate(invoice.id, 'NeedsEdits')}>
-                            Request edits
+
+                          <button
+                            className="action-button download"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDownloadInvoice(invoice);
+                            }}
+                            title="Download Invoice"
+                            aria-label="Download invoice"
+                          >
+                            <DownloadIcon />
                           </button>
-                          <button type="button" className="ghost danger" onClick={() => handleApprovalUpdate(invoice.id, 'Rejected')}>
-                            Reject
-                          </button>
+
+                          {invoice.approvalStatus === 'Approved' && (
+                            <button
+                              className="action-button forward"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleForwardToClient(invoice);
+                              }}
+                              title="Forward to Client"
+                              aria-label="Forward invoice to client"
+                            >
+                              <ForwardIcon />
+                            </button>
+                          )}
                         </div>
-                      ) : (
-                        <span className="muted">—</span>
-                      )}
+                      </div>
                     </span>
                     <span>
                       {new Intl.NumberFormat('en-IN', {
@@ -460,7 +773,24 @@ function App() {
               <header className="module-heading">
                 <h2>Updates</h2>
               </header>
-              <div className="activity-feed">{ACTIVITY_LOG.map((activity) => renderActivity(activity))}</div>
+              <div className="activity-feed">
+                {ACTIVITY_LOG.map((activity) => (
+                  <div key={activity.id} className="activity-row">
+                    <div>
+                      <p className="activity-label">{activity.summary}</p>
+                      <span className="activity-meta">
+                        {new Intl.DateTimeFormat('en-IN', {
+                          dateStyle: 'medium',
+                          timeStyle: 'short',
+                        }).format(new Date(activity.timestamp))}
+                        {' • '}
+                        {activity.actor}
+                      </span>
+                    </div>
+                    <span className={`activity-type ${activity.activityType}`}>{activity.activityType}</span>
+                  </div>
+                ))}
+              </div>
             </section>
           </div>
         )
@@ -518,6 +848,14 @@ function App() {
           <p className="nav-label">Management</p>
           <button
             type="button"
+            className={activeView === 'dashboard' ? 'active' : ''}
+            onClick={() => setActiveView('dashboard')}
+          >
+            <span className="nav-icon">📈</span>
+            Visual Dashboard
+          </button>
+          <button
+            type="button"
             className={activeView === 'overview' ? 'active' : ''}
             onClick={() => setActiveView('overview')}
           >
@@ -559,6 +897,7 @@ function App() {
             className={activeView === 'notifications' ? 'active' : ''}
             onClick={() => setActiveView('notifications')}
           >
+            <span className="nav-icon">🔔</span>
             Notifications {unreadCount ? <span className="badge">{unreadCount}</span> : null}
           </button>
         </nav>
